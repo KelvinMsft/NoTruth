@@ -120,7 +120,7 @@
       <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(OutDir)..\$(ConfigurationName)_WDK\capstone.lib;ntstrsafe.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ntstrsafe.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -146,7 +146,6 @@
     <ClCompile Include="..\HyperPlatform\HyperPlatform\util.cpp" />
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp" />
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vmm.cpp" />
-    <ClCompile Include="cs_driver_mm.c" />
     <ClCompile Include="NoTruth.cpp" />
     <ClCompile Include="shadow_hook.cpp" />
     <ClCompile Include="Ring3Hide.cpp" />
@@ -164,7 +163,6 @@
     <ClInclude Include="..\HyperPlatform\HyperPlatform\util.h" />
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vm.h" />
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h" />
-    <ClInclude Include="cs_driver_mm.h" />
     <ClInclude Include="NoTruth.h" />
     <ClInclude Include="IOCTL.h" />
     <ClInclude Include="shadow_hook.h" />

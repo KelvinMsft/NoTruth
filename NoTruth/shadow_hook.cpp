@@ -18,7 +18,6 @@
 #include <memory>
 #include <algorithm>
 #include <array>
-#include "cs_driver_mm.h"
 #include "Ring3Hide.h"
 #include <string>
 #include <stack>
@@ -44,30 +43,9 @@ struct Page {
   ~Page();
 };
 
-// Contains a single steal thook information
-
-struct HookInformation {
-  void* patch_address;  // An address where a hook is installed
-  void* handler;        // An address of the handler routine
-
-  // A copy of a pages where patch_address belongs to. shadow_page_base_for_rw
-  // is exposed to a guest for read and write operation against the page of
-  // patch_address, and shadow_page_base_for_exec is exposed for execution.
-  std::shared_ptr<Page> shadow_page_base_for_rw;	//VA for rw hooking page of created / retrieved page of Original page
-  std::shared_ptr<Page> shadow_page_base_for_exec;  //VA for exec hooking page of created / retrieved page of Original page
-
-  // Phyisical address of the above two copied pages
-  ULONG64 pa_base_for_rw;							//PA of above
-  ULONG64 pa_base_for_exec;							//PA of above
-
-  // A name of breakpont (a DDI name)
-  std::array<char, 64> name;
-};
-
 
 // Data structure shared across all processors
 struct SharedShadowHookData {
-  std::vector<std::unique_ptr<HookInformation>> KernelModeList;  // Hold installed KernelModeList
   std::vector<std::unique_ptr<HideInformation>> UserModeList; //var hide
 };
 
@@ -110,25 +88,6 @@ static_assert(sizeof(TrampolineCode) == 7, "Size check");
 // prototypes
 //
 
-_IRQL_requires_max_(PASSIVE_LEVEL) static std::
-    unique_ptr<HookInformation> ShpCreateHookInformation(
-        _In_ SharedShadowHookData* shared_sh_data, _In_ void* address,
-        _In_ ShadowHookTarget* target, _In_ const char* name);
-
-_IRQL_requires_max_(PASSIVE_LEVEL) _Success_(return ) EXTERN_C
-    static bool ShpSetupInlineHook(_In_ void* patch_address,
-                                   _In_ UCHAR* shadow_exec_page,
-                                   _Out_ void** original_call_ptr);
-
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C static SIZE_T
-    ShpGetInstructionSize(_In_ void* address);
-
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C static TrampolineCode
-    ShpMakeTrampolineCode(_In_ void* hook_handler);
-
-static HookInformation* ShpFindPatchInfoByPage(
-    _In_ const SharedShadowHookData* shared_sh_data, _In_ void* address);
-
 static HideInformation* ShpFindHideInfoByProc(
 	const SharedShadowHookData* shared_sh_data, ULONG64 fault_pa);
 
@@ -137,9 +96,6 @@ static HideInformation* ShpFindHideInfoByPage(
 
 static HideInformation* ShpFindHideByAddress(
 	_In_ const SharedShadowHookData* shared_sh_data, _In_ void* address);
-
-static HookInformation* ShpFindPatchInfoByAddress(
-    _In_ const SharedShadowHookData* shared_sh_data, _In_ void* address);
 
 //Come from Reading, independent page
 static void kEnableEntryForExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
@@ -158,16 +114,6 @@ static void kEnableEntryForAll(_In_ const HideInformation& info , _In_ EptData* 
 // As a result, we always have to set it to read-only, 
 // so that we can confirm that CPU always used safe-page even after specific write / execute 
 static const HideInformation* kRestoreLastHideInfo(_In_ ShadowHookData* sh_data);
-
-
-static void ShpEnablePageShadowingForExec(_In_ const HookInformation& info,
-                                          _In_ EptData* ept_data);
-
-static void ShpEnablePageShadowingForRW(_In_ const HookInformation& info,
-                                        _In_ EptData* ept_data);
-
-static void ShpDisablePageShadowing(_In_ const HookInformation& info,
-                                    _In_ EptData* ept_data);
 
 static void kDisableVarHiding(_In_ const HideInformation& info,
 								_In_ EptData* ept_data);
@@ -198,15 +144,10 @@ extern "C" {
 #if defined(ALLOC_PRAGMA)
 #pragma alloc_text(INIT, ShAllocateShadowHookData)
 #pragma alloc_text(INIT, ShAllocateSharedShaowHookData)
-#pragma alloc_text(INIT, ShEnableHooks)
 #pragma alloc_text(PAGE, ShInstallHide)
 #pragma alloc_text(PAGE, kInitHiddenEngine)
-#pragma alloc_text(INIT, ShpSetupInlineHook)
-#pragma alloc_text(INIT, ShpGetInstructionSize)
-#pragma alloc_text(INIT, ShpMakeTrampolineCode)
 #pragma alloc_text(PAGE, ShFreeShadowHookData)
 #pragma alloc_text(PAGE, ShFreeSharedShadowHookData)
-#pragma alloc_text(PAGE, ShDisableHooks)
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -271,10 +212,6 @@ _Use_decl_annotations_ EXTERN_C void ShFreeShadowHookData(
 _Use_decl_annotations_ EXTERN_C SharedShadowHookData* ShAllocateSharedShaowHookData() {
   PAGED_CODE();
 
-  if (cs_driver_mm_init() != CS_ERR_OK) {
-    return nullptr;
-  }
-
   auto p = new SharedShadowHookData();
   RtlFillMemory(p, sizeof(SharedShadowHookData), 0);
   return p;
@@ -288,28 +225,6 @@ _Use_decl_annotations_ EXTERN_C void ShFreeSharedShadowHookData(
   delete shared_sh_data;
 }
 
-// Enables page shadowing for all KernelModeList
-_Use_decl_annotations_ EXTERN_C NTSTATUS ShEnableHooks() {
-  PAGED_CODE();
-  return UtilForEachProcessor(
-      [](void* context) {
-        UNREFERENCED_PARAMETER(context);
-        return UtilVmCall(HypercallNumber::kShEnablePageShadowing, nullptr);
-      },
-      nullptr);
-}
-
-// Disables page shadowing for all KernelModeList
-_Use_decl_annotations_ EXTERN_C NTSTATUS ShDisableHooks() {
-  PAGED_CODE();
-
-  return UtilForEachProcessor(
-      [](void* context) {
-        UNREFERENCED_PARAMETER(context);
-        return UtilVmCall(HypercallNumber::kShDisablePageShadowing, nullptr);
-      },
-      nullptr);
-}
 _Use_decl_annotations_ EXTERN_C NTSTATUS kStartHiddenEngine() {
 	PAGED_CODE();
 	//VM-CALL, after vm-call trap into VMM
@@ -354,33 +269,6 @@ _Use_decl_annotations_ NTSTATUS kEnableVarHiding(
 	return STATUS_SUCCESS;
 }
 
-// Enables page shadowing for all KernelModeList
-_Use_decl_annotations_ NTSTATUS ShEnablePageShadowing(
-    EptData* ept_data, 
-	const SharedShadowHookData* shared_sh_data
-) 
-{
- // HYPERPLATFORM_COMMON_DBG_BREAK();
-
-  for (auto& info : shared_sh_data->KernelModeList) 
-  {
-    ShpEnablePageShadowingForExec(*info, ept_data);
-  }
-
-  return STATUS_SUCCESS;
-}	
-
-// Disables page shadowing for all KernelModeList
-_Use_decl_annotations_ void ShVmCallDisablePageShadowing(
-	EptData* ept_data, 
-	const SharedShadowHookData* shared_sh_data
-) 
-{
-  for (auto& info : shared_sh_data->KernelModeList) 
-  {
-    ShpDisablePageShadowing(*info, ept_data);
-  }
-}
 
 _Use_decl_annotations_ void kVmCallDisableVarHiding(_In_ EptData* ept_data, _In_ const SharedShadowHookData* shared_sh_data) 
 {
@@ -391,6 +279,7 @@ _Use_decl_annotations_ void kVmCallDisableVarHiding(_In_ EptData* ept_data, _In_
 }
 
 //use with other SetTerminateProcess
+//------------------------------------------------------------------------//
 _Use_decl_annotations_ void kVmCallDisableVarHidingIndependently(_In_ EptData* ept_data, _In_ const SharedShadowHookData* shared_sh_data) 
 {
 	ULONG count = 0;
@@ -410,65 +299,16 @@ _Use_decl_annotations_ void kVmCallDisableVarHidingIndependently(_In_ EptData* e
 // and if so, modifies the contents of guest's IP to execute a corresponding
 // hook handler.
 
-//?理#bp異常
+//------------------------------------------------------------------------//
 _Use_decl_annotations_ bool ShHandleBreakpoint(
 	ShadowHookData* sh_data,
 	const SharedShadowHookData* shared_sh_data,
 	void* guest_ip) 
 {
   UNREFERENCED_PARAMETER(sh_data);
-
-  if (!ShpIsShadowHookActive(shared_sh_data)) {
-    return false;
-  }
-
-  //尋找指?, 指向對應HookInfo對象
-  const auto info = ShpFindPatchInfoByAddress(shared_sh_data, guest_ip);
-  if (!info) {
-    return false;
-  }
-
-  // Update guest's IP
-  // 把?發#BP Rip 指向對應對象的回?函數
-  UtilVmWrite(VmcsField::kGuestRip, reinterpret_cast<ULONG_PTR>(info->handler));
   return true;
 }
-
-_Use_decl_annotations_
-void MonitorPageChange(ShadowHookData* sh_data, const SharedShadowHookData* shared_sh_data, EptData* ept_data, ULONG64 CR3) 
-{
-	ULONG64 faultaddr = 0;
-	ULONG64 newpa = 0;
-	//HYPERPLATFORM_LOG_DEBUG("PageFault_Phy: %I64X PageFault_Vir: %I64X \r\n", sh_data->PageFault_Phy, sh_data->PageFault_Virt);
-	for (auto& info : shared_sh_data->UserModeList) 
-	{
-		if (info->patch_address == (PVOID)sh_data->PageFault_Virt && CR3 == info->CR3) 
-		{
-			faultaddr = info->NewPhysicalAddress;
-			if (faultaddr) 
-			{
-				ULONG64 newpa = 0;
-				GetPhysicalAddressByNewCR3((PVOID)sh_data->PageFault_Virt, info->CR3, &newpa);
-				HYPERPLATFORM_LOG_DEBUG("CR3: %I64X mapping changed from %I64X to %I64X ", CR3, faultaddr, newpa);
-
-				if (faultaddr != newpa)
-				{		
-					//HYPERPLATFORM_LOG_DEBUG("CR3: %I64X mapping changed from %I64X to %I64X ", CR3, faultaddr, newpa);
-					if (newpa) 
-					{	
-					
-						ModifyEPTEntryRWX(ept_data, newpa, newpa, FALSE, FALSE, TRUE);
-						info->NewPhysicalAddress = newpa;
-					}
-						ModifyEPTEntryRWX(ept_data, sh_data->PageFault_Phy, sh_data->PageFault_Phy, TRUE, TRUE, TRUE);
-						UtilInveptAll();
-						sh_data->PageFault_Phy = 0;
-						sh_data->PageFault_Virt = 0;
-					}
-				}
-			}
-		}
-}
+//------------------------------------------------------------------------//
 // Handles MTF VM-exit. Re-enables the shadow hook and clears MTF.
 PKAPC_STATE apc;
 _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
@@ -483,40 +323,10 @@ _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
 		const auto info = kRestoreLastHideInfo(sh_data);//get back last written EPT-Pte
 		kEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	 
 	}
-	else if (sh_data->IsKernelMemory)
-	{
-		const auto info = ShpRestoreLastHookInfo(sh_data);//get back last written EPT-Pte
-		ShpEnablePageShadowingForExec(*info, ept_data);		     //turn back read-only	 
-	}
+
 	ShpSetMonitorTrapFlag(sh_data, false);
 } 
 
-// Handles EPT violation VM-exit.
-// old for hidden-hook queue
-_Use_decl_annotations_ void ShHandleEptViolation(
-												ShadowHookData* sh_data, 
-												const SharedShadowHookData* shared_sh_data,
-												EptData* ept_data,
-												void* fault_va)
-{
-
-  if (!ShpIsShadowHookActive(shared_sh_data)) {
-    return;
-  }
-  //尋找頁面
-  const auto info = ShpFindPatchInfoByPage(shared_sh_data, fault_va);
-  if (!info) {
-    return;
-  }
-  // EPT violation was caused because a guest tried to read or write to a page
-  // where currently set as execute only for protecting a hook. Let a guest
-  // read or write a page from a read/write shadow page and run a single
-  // instruction.
-
-  ShpEnablePageShadowingForRW(*info, ept_data); //設置頁面可讀寫, 而所有EPT失效
-  ShpSetMonitorTrapFlag(sh_data, true);			//設置MTF位,執行單步
-  ShpSaveLastHookInfo(sh_data, *info);			//保存最新設置
-}
 
 
 // Handles EPT violation VM-exit.
@@ -608,234 +418,7 @@ _Use_decl_annotations_ EXTERN_C bool kInitHiddenEngine(
 	shared_sh_data->UserModeList.push_back(std::move(info));
 	return TRUE;
 }
-_Use_decl_annotations_ EXTERN_C bool ShInstallHide(
-    SharedShadowHookData* shared_sh_data, 
-	void* address,
-    ShadowHookTarget* target, 
-	const char* name,
-	bool isVar,
-	bool isRing3,
-	ULONG64 P_Paddr,
-	ULONG64 CR3,//old physical address ,
-	PVOID64 mdl,
-	PEPROCESS proc
-)		
-{
-	 //PAGED_CODE();
-	  //1. getting original page; 
-	  auto info = ShpCreateHookInformation(shared_sh_data, reinterpret_cast<void*>(address), target, name);
-	  if (!info) {
-		  return false;
-	  }
 
-	  // Write a 0xCC with instruction len. 
-	  // 2. write 0xCC into original 
-	  if (!ShpSetupInlineHook(info->patch_address, info->shadow_page_base_for_exec->page, &target->original_call)) {
-		  return false;
-	  }
-
-	  HYPERPLATFORM_LOG_DEBUG(
-		  "Patch = %p, Exec = %p, RW = %p, Trampoline = %p", info->patch_address,
-		  info->shadow_page_base_for_exec->page + BYTE_OFFSET(info->patch_address),
-		  info->shadow_page_base_for_rw->page + BYTE_OFFSET(info->patch_address),
-		  target->original_call);
-
-	  //把是次HOOK的INFO壓入到最後
-	  shared_sh_data->KernelModeList.push_back(std::move(info));
- 
-  return true;
-}
-
-// Creates or reuses a couple of copied pages and initializes HookInformation
-_Use_decl_annotations_ static std::unique_ptr<HookInformation>
-ShpCreateHookInformation(SharedShadowHookData* shared_sh_data, void* address,
-                         ShadowHookTarget* target, const char* name) {
-  auto info = std::make_unique<HookInformation>();
-  
-  //find a page by comparing patch address (va)
-  auto reusable_info = ShpFindPatchInfoByPage(shared_sh_data, address);
-  
-  //if exist a page that we hooked, use it.
-  if (reusable_info) { 
-    // Found an existing HookInformation object targetting the same page as this
-    // one. re-use shadow pages.
-    info->shadow_page_base_for_rw = reusable_info->shadow_page_base_for_rw;
-    info->shadow_page_base_for_exec = reusable_info->shadow_page_base_for_exec;
-  } 
-
-  //if not exist a page that we hooked, allocate it.
-  else {  
-
-    // This hook is for a page that is not currently have any KernelModeList (ie not
-    // shadowed). Creates shadow pages.
-    info->shadow_page_base_for_rw = std::make_shared<Page>();
-    info->shadow_page_base_for_exec = std::make_shared<Page>();
-	
-	//aligning the page
-    auto page_base = PAGE_ALIGN(address);
-
-	//copy memory from page base 
-    RtlCopyMemory(info->shadow_page_base_for_rw->page, page_base, PAGE_SIZE);
-    RtlCopyMemory(info->shadow_page_base_for_exec->page, page_base, PAGE_SIZE);
-  }
-
-  //patch address of Inline hook
-  info->patch_address = address;
-  
-  //Store PA of a page base (VA) of created / retrieved page. (I.e  Original Page/ Hooked Page respectively)
-  info->pa_base_for_rw = UtilPaFromVa(info->shadow_page_base_for_rw->page);
-  
-  //Store PA of a page base (VA) of created / retrieved page. (I.e  Original Page/ Hooked Page respectively)
-  info->pa_base_for_exec = UtilPaFromVa(info->shadow_page_base_for_exec->page);
-  
-  //hook handler
-  info->handler = target->handler;
- 
-  //hook名稱
-  RtlCopyMemory(info->name.data(), name, info->name.size() - 1);
-  
-  return info;
-}
-// Builds a trampoline code for calling an orignal code and embeds 0xcc on the
-// shadow_exec_page + 掛勾地址的偏移 = 0xCC
-// 掛勾地址 = 被inline hook
-_Use_decl_annotations_ EXTERN_C static bool ShpSetupInlineHook(
-    void* patch_address,		//要掛勾的地址
-	UCHAR* shadow_exec_page,	//Retrieved/Created(Hooked / Original Page)
-	void** original_call_ptr	//原函數調用HOOK位置指令+下一句指令
-) {
-  PAGED_CODE();
-
-  //從目標地址取指令長度
-  const auto patch_size = ShpGetInstructionSize(patch_address);
-  if (!patch_size) {
-    return false;
-  }
-
-  // Build trampoline code (copied stub -> in the middle of original)
-  //HOOK指令的下一句指令
-  //生成遠跳指令
-  const auto jmp_to_original = ShpMakeTrampolineCode(reinterpret_cast<UCHAR*>(patch_address) + patch_size);
-
-#pragma warning(push)
-#pragma warning(disable : 30030)  // Allocating executable POOL_TYPE memory
-
-  const auto original_call = ExAllocatePoolWithTag(NonPagedPoolExecute, 
-								  patch_size + sizeof(jmp_to_original),
-								  kHyperPlatformCommonPoolTag);
-#pragma warning(pop)
-  if (!original_call) {
-    return false;
-  }
-
-  // Copy original code and embed jmp code following original code
-  //保存原有代碼
-  RtlCopyMemory(original_call, patch_address, patch_size);
-#pragma warning(push)
-#pragma warning(disable : 6386) 
-  // 90
-  // FF 25 00 00 00 00 
-  // handler
- 
-  RtlCopyMemory(reinterpret_cast<UCHAR*>(original_call) + patch_size, &jmp_to_original, sizeof(jmp_to_original));
-#pragma warning(pop)
-
-  // install patch to shadow page
-  static const UCHAR kBreakpoint[] = {
-      0xcc,
-  };
-  //要hook的指令長度 
-  //影子頁面+hook地址偏移 寫入0xCC
-   RtlCopyMemory(shadow_exec_page + BYTE_OFFSET(patch_address), kBreakpoint, sizeof(kBreakpoint));
-
-  //清除cpu緩存
-  KeInvalidateAllCaches();
-
-  //HOOK的地址
-  *original_call_ptr = original_call;
-  return true;
-}
-
-// Returns a size of an instruction at the address
-_Use_decl_annotations_ EXTERN_C static SIZE_T ShpGetInstructionSize(
-    void* address) {
-  PAGED_CODE();
-
-  // Save floating point state
-  KFLOATING_SAVE float_save = {};
-  auto status = KeSaveFloatingPointState(&float_save);
-  if (!NT_SUCCESS(status)) {
-    return 0;
-  }
-
-  // Disassemble at most 15 bytes to get an instruction size
-  csh handle = {};
-  const auto mode = IsX64() ? CS_MODE_64 : CS_MODE_32;
-  if (cs_open(CS_ARCH_X86, mode, &handle) != CS_ERR_OK) {
-    KeRestoreFloatingPointState(&float_save);
-    return 0;
-  }
-
-  static const auto kLongestInstSize = 15;
-  cs_insn* instructions = nullptr;
-  const auto count =
-      cs_disasm(handle, reinterpret_cast<uint8_t*>(address), kLongestInstSize,
-                reinterpret_cast<uint64_t>(address), 1, &instructions);
-  if (count == 0) {
-    cs_close(&handle);
-    KeRestoreFloatingPointState(&float_save);
-    return 0;
-  }
-
-  // Get a size of the first instruction
-  const auto size = instructions[0].size;
-  cs_free(instructions, count);
-  cs_close(&handle);
-
-  // Restore floating point state
-  KeRestoreFloatingPointState(&float_save);
-  return size;
-}
-
-// Returns code bytes for inline hooking
-_Use_decl_annotations_ EXTERN_C static TrampolineCode ShpMakeTrampolineCode(void* hook_handler) {
-  PAGED_CODE();
-
-#if defined(_AMD64_)
-  // 90               nop
-  // ff2500000000     jmp     qword ptr cs:jmp_addr
-  // jmp_addr:
-  // 0000000000000000 dq 0
-  return {
-      0x90,
-      {
-          0xff, 0x25, 0x00, 0x00, 0x00, 0x00,
-      },
-      hook_handler,
-  };
-#else
-  // 90               nop
-  // 6832e30582       push    offset nt!ExFreePoolWithTag + 0x2 (8205e332)
-  // c3               ret
-  return {
-      0x90, 0x68, hook_handler, 0xc3,
-  };
-#endif
-}
-
-// Find a HookInformation instance by address
-// 
-_Use_decl_annotations_ static HookInformation* ShpFindPatchInfoByPage(
-    const SharedShadowHookData* shared_sh_data, void* address)
-{
- const auto found = std::find_if(shared_sh_data->KernelModeList.cbegin(), shared_sh_data->KernelModeList.cend(),[address](const auto& info) {
-        return PAGE_ALIGN(info->patch_address) == PAGE_ALIGN(address);
-      });
-  if (found == shared_sh_data->KernelModeList.cend()) {
-    return nullptr;
-  }
-  return found->get();
-}
 _Use_decl_annotations_ static HideInformation* ShpFindHideInfoByProc(const SharedShadowHookData* shared_sh_data, ULONG64 fault_pa)
 {
 	const auto found = std::find_if(shared_sh_data->UserModeList.cbegin(), shared_sh_data->UserModeList.cend(), [fault_pa](const auto& info) {	
@@ -858,24 +441,7 @@ _Use_decl_annotations_ static HideInformation* ShpFindHideInfoByPage(const Share
 
 	return found->get();
 }
-// Find a HookInformation instance that are on the same page as the address
-_Use_decl_annotations_ static HookInformation* ShpFindPatchInfoByAddress(const SharedShadowHookData* shared_sh_data, void* address) 
-{
-  auto found = std::find_if
-  (
-      shared_sh_data->KernelModeList.cbegin(), shared_sh_data->KernelModeList.cend(),
-      [address](const auto& info)
-	  {
-		return info->patch_address == address; 
-  	  }
-  );
-  
-  if (found == shared_sh_data->KernelModeList.cend()) 
-  {
-    return nullptr;
-  }
-  return found->get();
-}
+
 
 static HideInformation* ShpFindHideByAddress(_In_ const SharedShadowHookData* shared_sh_data, _In_ void* address)
 {
@@ -936,15 +502,6 @@ _Use_decl_annotations_ static void kEnableEntryForAll(const HideInformation& inf
 		ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_exec, TRUE, TRUE, TRUE);
 	// ring-3 end
 	}
-	else 
-	{
-	// ring-0 write
-		const auto ept_pt_entry = EptGetEptPtEntry(ept_data, UtilPaFromVa(info.patch_address));
-		ept_pt_entry->fields.write_access = true;
-		ept_pt_entry->fields.read_access  = true;
-		ept_pt_entry->fields.physial_address = UtilPfnFromPa(info.pa_base_for_exec);		
-	// ring-0 write
-	}
 	UtilInveptAll();
 }
 //Come here from Execute memory
@@ -959,47 +516,9 @@ _Use_decl_annotations_ static void kEnableEntryForReadAndExecuteOnly(const HideI
 		ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_rw, TRUE, FALSE, TRUE);
 		// ring-3 end
 	}
-	else 
-	{
-		// ring-0 write
-		const auto ept_pt_entry = EptGetEptPtEntry(ept_data, UtilPaFromVa(info.patch_address));
-		ept_pt_entry->fields.write_access = true;
-		ept_pt_entry->fields.read_access = true;
-		ept_pt_entry->fields.physial_address = UtilPfnFromPa(info.pa_base_for_rw);
-		// ring-0 write
-	}
 	UtilInveptAll();
 }
 
-//Sushi work
-_Use_decl_annotations_ static void ShpEnablePageShadowingForExec(const HookInformation& info, EptData* ept_data) 
-{
-	const auto ept_pt_entry = EptGetEptPtEntry(ept_data, UtilPaFromVa(info.patch_address));
-	ept_pt_entry->fields.write_access = false;
-	ept_pt_entry->fields.read_access = false;
-	ept_pt_entry->fields.physial_address = UtilPfnFromPa(info.pa_base_for_exec); 
-	UtilInveptAll();
-}
-//Sushi work
-_Use_decl_annotations_ static void ShpEnablePageShadowingForRW(const HookInformation& info, EptData* ept_data) 
-{
-  const auto ept_pt_entry = EptGetEptPtEntry(ept_data, UtilPaFromVa(info.patch_address));
-  ept_pt_entry->fields.write_access   = true;
-  ept_pt_entry->fields.read_access    = true;
-  ept_pt_entry->fields.physial_address = UtilPfnFromPa(info.pa_base_for_rw);
-  UtilInveptAll();
-}
-
-_Use_decl_annotations_ static void ShpDisablePageShadowing(const HookInformation& info, EptData* ept_data) 
-{
-  const auto pa_base = UtilPaFromVa(PAGE_ALIGN(info.patch_address));
-  const auto ept_pt_entry = EptGetEptPtEntry(ept_data, pa_base);
-  ept_pt_entry->fields.write_access = true;
-  ept_pt_entry->fields.read_access = true;
-  ept_pt_entry->fields.physial_address = UtilPfnFromPa(pa_base);
-  UtilInveptAll();
-}
-// 
 _Use_decl_annotations_ static void kDisableVarHiding(const HideInformation& info, EptData* ept_data)
 {
 	// ring-3 start 

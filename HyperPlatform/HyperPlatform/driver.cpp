@@ -107,10 +107,7 @@ NTSTATUS DispatchHideEngineIOCTL(
 		HYPERPLATFORM_LOG_DEBUG("Proc ID: %I64X Address : %I64X", data->ProcID, data->Address);
 		PsLookupProcessByProcessId((HANDLE)data->ProcID, &hiddenProc);
 		HiddenStartByIOCTL(hiddenProc, data->Address);
-
 	}
-	HYPERPLATFORM_LOG_DEBUG("Hide engine IOCTL Dispatching %x %X\r\n", IoControlCode, IOCTL_HIDE);
-	HYPERPLATFORM_LOG_DEBUG("ret\r\n");
 	return status;
 }
 //--------------------------------------------------------------------------------------//
@@ -119,12 +116,12 @@ NTSTATUS DDI_devCtrlRoutine(
 	IN PIRP					Irp
 )
 {
-	NTSTATUS			status = STATUS_SUCCESS;				//默认返回值、状态
-	PIO_STATUS_BLOCK	ioStatus;								//IRP的IO状态
-	PIO_STACK_LOCATION	pIrpStack;								//当前的IRP栈
+	NTSTATUS			status = STATUS_SUCCESS;				
+	PIO_STATUS_BLOCK	ioStatus;								
+	PIO_STACK_LOCATION	pIrpStack;								
 	PDEVICE_EXTENSION	deviceExtension;
-	PVOID				inputBuffer, outputBuffer;				//输入、输出缓冲区
-	ULONG				inputBufferLength, outputBufferLength;	//输入、输出缓冲区的大小
+	PVOID				inputBuffer, outputBuffer;				
+	ULONG				inputBufferLength, outputBufferLength;	
 	ULONG				ioControlCode;
 
 	/*	dprintf("[$XTR]--->IrpMjXTRdevCtrlRoutine( 0x%08x, 0x%08x ).\n", DeviceObject, Irp);*/

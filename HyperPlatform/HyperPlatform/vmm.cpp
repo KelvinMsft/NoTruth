@@ -935,36 +935,6 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
     guest_context->vm_continue = false;
 
   } 
-  else if (hypercall_number == HypercallNumber::kShEnablePageShadowing) 
-  {
-	//1. 尋找對應的ept表項
-	//2. 設置表項為不可讀/寫
-	//3. EPT-Violation handler中處理
-    ShEnablePageShadowing(
-        guest_context->stack->processor_data->ept_data,
-        guest_context->stack->processor_data->shared_data->shared_sh_data);
-	//設置RIP/EIP
-    VmmpAdjustGuestInstructionPointer(guest_context->ip);
-
-    // Indicates successful VMCALL
-    guest_context->flag_reg.fields.cf = false;
-    guest_context->flag_reg.fields.zf = false;
-    UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-
-  } 
-  else if (hypercall_number == HypercallNumber::kShDisablePageShadowing) 
-  {
-    ShVmCallDisablePageShadowing(
-        guest_context->stack->processor_data->ept_data,
-        guest_context->stack->processor_data->shared_data->shared_sh_data);
-
-    VmmpAdjustGuestInstructionPointer(guest_context->ip);
-    // Indicates successful VMCALL
-    guest_context->flag_reg.fields.cf = false;
-    guest_context->flag_reg.fields.zf = false;
-    UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-
-  }
   else if (hypercall_number == HypercallNumber::kShEnableVarHiding) {
 	  //set GVA->GPA -----> EPT PTE entry to read-only
 	  

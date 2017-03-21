@@ -587,10 +587,7 @@ _Use_decl_annotations_ void EptHandleEptViolation(
 		readOrWrite = false;
     
 	if (read_failure || write_failure || execute_failure) {
-		if (!kHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va, (VOID*)fault_pa, execute_failure, write_failure, read_failure ))
-		{
-			ShHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va);
-		}
+		kHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va, (VOID*)fault_pa, execute_failure, write_failure, read_failure);
     } else {
       DbgPrint("[IGNR] OTH VA = %p, PA = %016llx", fault_va,
                                    fault_pa);

@@ -56,10 +56,6 @@ _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void ShFreeSharedShadowHookData(
 	_In_ SharedShadowHookData* shared_sh_data);
-
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS ShEnableHooks();
-
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS ShDisableHooks();
  
 _IRQL_requires_min_(DISPATCH_LEVEL) NTSTATUS ShEnablePageShadowing(
 	_In_ EptData* ept_data, 
@@ -89,11 +85,6 @@ _IRQL_requires_min_(DISPATCH_LEVEL) bool ShHandleBreakpoint(
 _IRQL_requires_min_(DISPATCH_LEVEL) void ShHandleMonitorTrapFlag(
     _In_ ShadowHookData* sh_data,
     _In_ const SharedShadowHookData* shared_sh_data, _In_ EptData* ept_data);
-
-_IRQL_requires_min_(DISPATCH_LEVEL) void ShHandleEptViolation(
-    _In_ ShadowHookData* sh_data,
-    _In_ const SharedShadowHookData* shared_sh_data, _In_ EptData* ept_data,
-    _In_ void* fault_va);
 
 //-------------------------------------------------------------------------------------------------------------------------------------
 
