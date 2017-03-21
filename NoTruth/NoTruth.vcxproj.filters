@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\driver.cpp" />
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\ept.cpp">
+      <Filter>VMM</Filter>
+    </ClCompile>
+    <ClCompile Include="NoTruth.cpp">
+      <Filter>VMM</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\kernel_stl.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\performance.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Ring3Hide.cpp">
+      <Filter>NoTruth</Filter>
+    </ClCompile>
+    <ClCompile Include="shadow_hook.cpp">
+      <Filter>NoTruth</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\log.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\util.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp">
+      <Filter>VMM</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\vmm.cpp">
+      <Filter>VMM</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\driver.h" />
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\asm.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\ia32_type.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\ept.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="NoTruth.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\common.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\kernel_stl.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\perf_counter.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\performance.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Ring3Hide.h">
+      <Filter>NoTruth</Filter>
+    </ClInclude>
+    <ClInclude Include="shadow_hook.h">
+      <Filter>NoTruth</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\util.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\log.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\vm.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h">
+      <Filter>VMM\Header</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\HyperPlatform\HyperPlatform\Arch\x64\x64.asm">
+      <Filter>VMM\asm</Filter>
+    </MASM>
+    <MASM Include="..\HyperPlatform\HyperPlatform\Arch\x86\x86.asm">
+      <Filter>VMM\asm</Filter>
+    </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="NoTruth.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="VMM">
+      <UniqueIdentifier>{2392972c-c739-4bc2-bc0a-a56f209b01f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VMM\Header">
+      <UniqueIdentifier>{ed3a6845-8dc5-4da6-bc1b-0f8566118168}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{6e082e1a-96ab-442b-8268-6d24aeeaa4cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Header">
+      <UniqueIdentifier>{9ed23a19-31ab-4a51-8840-019995f0f00d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="NoTruth">
+      <UniqueIdentifier>{69e7fe99-a9ef-4e14-839f-45c75e24fd47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VMM\asm">
+      <UniqueIdentifier>{47dab3c2-0816-43ab-978a-03b1db832f9f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

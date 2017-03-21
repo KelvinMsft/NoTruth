@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="DdiMon.inf" />
+    <Inf Include="NoTruth.inf" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{B20D17DD-453E-4420-B691-4EB4B9AE3A15}</ProjectGuid>
@@ -164,7 +164,6 @@
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vm.h" />
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h" />
     <ClInclude Include="NoTruth.h" />
-    <ClInclude Include="IOCTL.h" />
     <ClInclude Include="shadow_hook.h" />
     <ClInclude Include="Ring3Hide.h" />
   </ItemGroup>

@@ -18,9 +18,9 @@
 using namespace std;
 struct HookInformation;
 struct HideInformation;
-extern SharedShadowHookData shared_sh_data;
+extern ShareDataContainer shared_sh_data;
 
-HideInformation* FindPatchInfoByAddress(SharedShadowHookData* data, void* address);
+HideInformation* FindPatchInfoByAddress(ShareDataContainer* data, void* address);
 
 struct MyPage {
 	UCHAR* page;
@@ -77,14 +77,14 @@ public:
 		bool isRing3,
 		ULONG64 physicalAddress);
 	
-	VOID set_global_array(SharedShadowHookData* data) {
+	VOID set_global_array(ShareDataContainer* data) {
 		this->data = data;
 	}
 	_Use_decl_annotations_ static HookInformation* FindPatchInfoByAddress(
-		const SharedShadowHookData* shared_sh_data,
+		const ShareDataContainer* shared_sh_data,
 		void* address);
 private:
-	SharedShadowHookData* data;	
+	ShareDataContainer* data;	
 public:
 	VariableHiding();
 	~VariableHiding();

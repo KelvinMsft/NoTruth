@@ -28,7 +28,7 @@ extern "C" {
 
 struct EptData;
 struct ShadowHookData;
-struct SharedShadowHookData;
+struct ShareDataContainer;
 
 /// A structure made up of mutual fields across all EPT entry types
 union EptCommonEntry {
@@ -74,7 +74,7 @@ void EptTermination(_In_ EptData* ept_data);
 /// @param ept_data   EptData to get an EPT pointer
 _IRQL_requires_min_(DISPATCH_LEVEL) void  EptHandleEptViolation	(
     _In_ EptData* ept_data, _In_ ShadowHookData* sh_data,
-    _In_ SharedShadowHookData* shared_sh_data);
+    _In_ ShareDataContainer* shared_sh_data);
 
 /// Returns an EPT entry corresponds to \a physical_address
 /// @param ept_data   EptData to get an EPT entry

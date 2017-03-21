@@ -32,7 +32,7 @@ static const ULONG kHyperPlatformVmmBackdoorCode = 'gniP';
 struct SharedProcessorData {
   volatile long reference_count;  ///< Number of processors sharing this data
   void* msr_bitmap;               ///< A bitmap to suppress MSR I/O VM-exit
-  struct SharedShadowHookData* shared_sh_data;  ///< Shared hadow hook data
+  struct ShareDataContainer* shared_sh_data;  ///< Shared hadow hook data
 };
 
 /// Represents VMM related data associated with each processor

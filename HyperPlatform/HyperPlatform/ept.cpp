@@ -546,11 +546,9 @@ _Use_decl_annotations_ static ULONG64 EptpAddressToPteIndex(
 // Deal with EPT violation VM-exit.
 _Use_decl_annotations_ void EptHandleEptViolation(
     EptData *ept_data, ShadowHookData *sh_data,
-    SharedShadowHookData *shared_sh_data) {
+    ShareDataContainer *shared_sh_data) {
   const EptViolationQualification exit_qualification = {
       UtilVmRead(VmcsField::kExitQualification)};
-
- // const auto guest_cr3 = UtilVmRead64(VmcsField::kGuestCr3);
 
   const auto fault_pa = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
   const auto fault_va =
@@ -567,7 +565,7 @@ _Use_decl_annotations_ void EptHandleEptViolation(
     if (!IsReleaseBuild()) {
       NT_VERIFY(EptpIsDeviceMemory(fault_pa));
     }
-//	DbgPrint("CR3 without EPT : %x  %s\r\n", guest_cr3, ((ULONG)PsGetCurrentProcess()+0x2D8));
+
 	EptpConstructTables(ept_data->ept_pml4, 4, fault_pa, ept_data);
 
     UtilInveptAll();

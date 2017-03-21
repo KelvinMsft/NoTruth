@@ -127,7 +127,7 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
 // 3. 初始化HOOKDATA,和自定義的一份MSR
 // 4. 遍歷每一個核心, 利用vmcall回調 使進入VMM
 // 5. 進入VMM後
-SharedShadowHookData* sharedata;
+ShareDataContainer* sharedata;
 _Use_decl_annotations_ NTSTATUS VmInitialization() {
   //頁面對齊
   PAGED_CODE();
@@ -178,7 +178,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
   }
-  sharedata = reinterpret_cast<SharedShadowHookData*>(shared_data->shared_sh_data);
+  sharedata = reinterpret_cast<ShareDataContainer*>(shared_data->shared_sh_data);
   status = NoTruthInitialization(shared_data->shared_sh_data);
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVM, nullptr);
@@ -400,31 +400,26 @@ _Use_decl_annotations_ static void VmpInitializeVm(
   }
   RtlZeroMemory(processor_data, sizeof(ProcessorData));
 
-  // Set up EPT
-  // 分配EPT?表,並???續的內存塊到EPT?表 映射到EPT?表(即索引一樣, 如: 索引值為10 , 則按放到10), 而每分配一?PML4 亦會向下分配其?3層 共512*512*512?
-  // 從而構建EPT?表(包括?續內存, LAPIC映射內存, Pre-alloc的ept表?(?有初始化))   
   processor_data->ept_data = EptInitialization();
   if (!processor_data->ept_data) {
     goto ReturnFalse;
   }
 
-  //?置CPU的shadow hook , 分配及初始化為0
+  
   processor_data->sh_data = ShAllocateShadowHookData();
   if (!processor_data->sh_data) {
     goto ReturnFalse;
   }
-  //分配一塊24kb , 6000字節的?續空?作為vmm的棧空? 並返回基址 (注意: 棧是往上發展, 所以棧的base是需要加上size才得出棧基址 而不是直接使用)
   const auto vmm_stack_limit = UtilAllocateContiguousMemory(KERNEL_STACK_SIZE);
-  //分配vmcs?域
+
   const auto vmcs_region =
       reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
           NonPagedPoolNx, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
-  //分配vmxon?域
+
   const auto vmxon_region =
       reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
           NonPagedPoolNx, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
 
-  // Initialize the management structure
   processor_data->vmm_stack_limit = vmm_stack_limit;
   processor_data->vmcs_region = vmcs_region;
   processor_data->vmxon_region = vmxon_region;
@@ -450,14 +445,12 @@ _Use_decl_annotations_ static void VmpInitializeVm(
   // +------------------+  <- vmm_stack_limit            (eg, AED34000)
   // (Low)
 
-  //基址+棧大小得到棧最高地址
   const auto vmm_stack_region_base = reinterpret_cast<ULONG_PTR>(vmm_stack_limit) + KERNEL_STACK_SIZE;
-  //如上圖, 下面直接寫入棧空? 
+
   const auto vmm_stack_data = vmm_stack_region_base - sizeof(void *);
-  //如上圖, 下面直接寫入棧空?
+
   const auto vmm_stack_base = vmm_stack_data - sizeof(void *);
 
-  //?出log
   HYPERPLATFORM_LOG_DEBUG("VmmStackTop=       %p", vmm_stack_limit);
   HYPERPLATFORM_LOG_DEBUG("VmmStackBottom=    %p", vmm_stack_region_base);
   HYPERPLATFORM_LOG_DEBUG("VmmStackData=      %p", vmm_stack_data);
@@ -466,36 +459,26 @@ _Use_decl_annotations_ static void VmpInitializeVm(
   HYPERPLATFORM_LOG_DEBUG("GuestStackPointer= %p", guest_stack_pointer);
   HYPERPLATFORM_LOG_DEBUG("GuestInstPointer=  %p", guest_instruction_pointer);
 
-  //如圖?置 直接寫入棧空?
   *reinterpret_cast<ULONG_PTR *>(vmm_stack_base) = MAXULONG_PTR;
-  //如圖?置 直接寫入棧空?
   *reinterpret_cast<ProcessorData **>(vmm_stack_data) = processor_data;
 
-  //CPU共享數據, 當中包含共享數據的CPU總數, 以及msr位圖, 內存?藏的HOOK
   processor_data->shared_data = shared_data;
 
   InterlockedIncrement(&processor_data->shared_data->reference_count);
 
   // Set up VMCS 
-
-  // 初始化VMXON_REGION :
-  // 1. ?置VMCS版本
-  // 2. ?用匯編函數,?用VMXON
   if (!VmpEnterVmxMode(processor_data)) {
     goto ReturnFalse;
   }
-  //初始化VMCS_REGION
   if (!VmpInitializeVMCS(processor_data)) {
     goto ReturnFalseWithVmxOff;
   }
-  //初始化vmcs
   if (!VmpSetupVMCS(processor_data, guest_stack_pointer,
                     guest_instruction_pointer, vmm_stack_base)) {
     goto ReturnFalseWithVmxOff;
   }
 
   // Do virtualize the processor
-  //啟動vm
   VmpLaunchVM();
 
 // Here is not be executed with successful vmlaunch. Instead, the context
@@ -509,58 +492,37 @@ ReturnFalse:;
 }
 
 // See: VMM SETUP & TEAR DOWN
-//?入vmx模式, 參數為Process數據
-/*
-struct ProcessorData {
-	SharedProcessorData* shared_data;         ///< Shared data
-	void* vmm_stack_limit;                    ///< A head of VA for VMM stack
-	struct VmControlStructure* vmxon_region;  ///< VA of a VMXON region
-	struct VmControlStructure* vmcs_region;   ///< VA of a VMCS region
-	struct EptData* ept_data;                 ///< A pointer to EPT related data
-	struct ShadowHookData* sh_data;           ///< Per-processor shadow hook data
-};
-*/
 
-//主要功能用於?置VMXON_REGION?域, 然後啟動CPU VMX模式
 _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data) {
   // Apply FIXED bits
 
-  // 求cr0寄存器某些位應如何被修正...(哪些為0, 哪些為1) 由cpu返回, ??在MSR寄存器
-  const Cr0 cr0_fixed0 = {UtilReadMsr(Msr::kIa32VmxCr0Fixed0)};	//?取cr0應?要修正為0的位
-  const Cr0 cr0_fixed1 = {UtilReadMsr(Msr::kIa32VmxCr0Fixed1)}; //?取cr0應?要修正為1的位
-  Cr0 cr0 = {__readcr0()};										//?取cr0寄存器
+  const Cr0 cr0_fixed0 = {UtilReadMsr(Msr::kIa32VmxCr0Fixed0)};
+  const Cr0 cr0_fixed1 = {UtilReadMsr(Msr::kIa32VmxCr0Fixed1)};
+  Cr0 cr0 = {__readcr0()};										
 	
-  cr0.all &= cr0_fixed1.all;		//?置
-  cr0.all |= cr0_fixed0.all;		//?置
+  cr0.all &= cr0_fixed1.all;		
+  cr0.all |= cr0_fixed0.all;		
 
-  __writecr0(cr0.all);				//寫入修正好的cr0
+  __writecr0(cr0.all);				
 
-  //同上
   const Cr4 cr4_fixed0 = {UtilReadMsr(Msr::kIa32VmxCr4Fixed0)};
   const Cr4 cr4_fixed1 = {UtilReadMsr(Msr::kIa32VmxCr4Fixed1)};
   Cr4 cr4 = {__readcr4()};
   cr4.all &= cr4_fixed1.all;
   cr4.all |= cr4_fixed0.all;
-  __writecr4(cr4.all);				//寫入修正好的cr4
+  __writecr4(cr4.all);				
 
-  // Write a VMCS revision identifier
-  // ?取VMCS版本?
   const Ia32VmxBasicMsr vmx_basic_msr = {UtilReadMsr64(Msr::kIa32VmxBasic)};
-  // 寫入VMCS版本?到VMCS
+
   processor_data->vmxon_region->revision_identifier = vmx_basic_msr.fields.revision_identifier;
   
   //?取對應?域的物理地址
   auto vmxon_region_pa = UtilPaFromVa(processor_data->vmxon_region);
   
-  //啟動, 把VMCS寫入
-  /*  根據手册:
-   *  程序員VMXON時 需要自己分配一?VMXON_REGION (每一?核心(???理器)應?要有對應一份的VMX_REGION)
-   *  把???域的物理地址傳入,當作參數
-   */
   if (__vmx_on(&vmxon_region_pa)) {
     return false;
   }
-  //?置所有EPT為無效
+
   UtilInveptAll();
   return true;
 }
@@ -572,27 +534,22 @@ _Use_decl_annotations_ static bool VmpInitializeVMCS(ProcessorData *processor_da
 
   const Ia32VmxBasicMsr vmx_basic_msr = {UtilReadMsr64(Msr::kIa32VmxBasic)};
 
-  //?置VMCS格式的版本?
   processor_data->vmcs_region->revision_identifier =
       vmx_basic_msr.fields.revision_identifier;
 
-  //?取VMCS物理地址
   auto vmcs_region_pa = UtilPaFromVa(processor_data->vmcs_region);
 
-  //解除當前VMCS的綁定
   if (__vmx_vmclear(&vmcs_region_pa)) {
     return false;
   }
-  //綁定VMCS到當前CPU
   if (__vmx_vmptrld(&vmcs_region_pa)) {
     return false;
   }
 
   // The launch state of current VMCS is "clear"
-  // VM-ENTRY時的狀態要求
   // VMLAUCH -> clear	
   // VMRESUME-> launched 
-  // 返回時VMCS已綁定到當前CPU, 狀態為CLEAR
+
 
   return true;
 }
@@ -604,11 +561,9 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
     ULONG_PTR guest_instruction_pointer, 
 	ULONG_PTR vmm_stack_pointer) 
 {
-  //寫入gdtr
   Gdtr gdtr = {};
   __sgdt(&gdtr);
   
-  //寫入idtr
   Idtr idtr = {};
   __sidt(&idtr);
 
@@ -616,175 +571,9 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
 
   const auto use_true_msrs = Ia32VmxBasicMsr{UtilReadMsr64(Msr::kIa32VmxBasic)}.fields.vmx_capability_hint;
   
-  //以下填充一大堆的vmcs結構
   VmxVmEntryControls vm_entryctl_requested = {};
-  //是否支持64位
   vm_entryctl_requested.fields.ia32e_mode_guest = IsX64();
 
-  /* VMCS結構:
-  *  1. Guest-state area:						//客戶機狀態域(如vmware) , ?入VMM時保存 ??VMM時恢復
-		 Cr0, Cr3, Cr4
-		 Dr7
-		 Rsp, Rip 或對應的32位寄存器
-		 所有段?擇子(包括16位?擇子?,段基址,?問權限,段大小)
-		 GDTR,LDTR
-		 以下MSR:
-			 IA32_DEBUGCTL
-			 IA32_SYSENTER_CS
-			 IA32_SYSENTER_ESP & EIP
-			 IA32_PERF_GLOBAL_CTRL
-			 IA32_PAT
-			 IA32_EFER
-		SMBASE寄存器	
-
-		Activity State(32bit)				//CPU活動狀態		
-			0: Active						//活動中
-			1: HLT							//正在執行HLT指令
-			2: ShutDown						//由於3次??,導致?機			
-			3: Wait-for-SIPI					//等待主?擬CPU,發送啟動Startup-IPI
-
-		Interruptibility State(32bit)		//可中斷性狀態
-			bit[0]: Blocking by STI			//表示STI屏蔽目前生效中			
-			bit[1]: Blocking by mov SS		//表示MOV SS屏蔽目前生效中
-			bit[2]: Blocking by SMI			//表示SMI屏蔽目前生效中
-			bit[3]: Blocking by NMI			//表示NMI屏蔽目前生效中
-			bit[31:4]: 0					//保留位, 非零會??
-
-		Pending debug Exceptions(64/32bit)	
-			bit[3:0]:  B3-B0					// 每一位表示對應的斷?狀態, DR7?有?置為會陷入VMM狀態
-			bit[11:4]: 保留位				// 清零, 非零則VM entry失敗
-			bit[12]:   enabled bp			// 表示最小有一?或多?數據斷?或I/O斷? 斷下 並且他已在DR7激活
-			bit[14]:   bs					// 表示???異常會?發單步異常
-			bit[15]:   保留位				// 清零, 非零則VM entry失敗
-			bit[16]:   RTM					// 表示??事件發生在RTM?域
-			bit[63:17]: 保留位				// 清零, 非零則VM entry失敗
-
-		VMCS Link Pointer(64bit)			// 如果VMCS Shadow = 1時生效, 那?寫vmcs則在??VMCS中?寫, 否則在原有VMCS?寫(可利用?)
-											// 不用時全?置為1
-
-		vmx-preemption timer value(32bit)			// activate VMX-preemption timer = 1	 生效
-													// ?置搶占式?時器的值
-
-		Page-directory-pointer-table entry(64bit)	// Enable EPT = 1 時生效 
-													// PDPTE?似於X86 ?表?
-
-		Guest Interrupt status(16bit)				// virtual-interrupt delivery = 1時生效
-			Request virtual interrupt				// 位8位, 
-			Servcing virtual interrupt				// 高8位
-
-		PML Index(16bit)							// Enable PML = 1   時生效 , PML表索引 / PML address VM-exec. 基址 ,  索引範圍為0~511 , 
-													// 以上生效時, 同時?置EPTP[6]?置為1, 如??位為1 則:把所有?問當成寫入,並?置dirty bit
-													// 對應?用於?置曾被?問標?(bit[8], ?問時?置) 及 dirty bit (bit[9], 寫入時?置)
-													// 保存EPT PML4物理地址(4字節對?) ?似?目?
-													// Ia32VmxEptVpidCapMsr 可以知道是否支持PML
-
-  * 2. Host-state area							//宿主機狀態域(物理機器),  ??VMM時保存 ?入VMM時恢復
-		只有Guest-state area的寄存器域
-
-  * 3. VM-execution control fields			// ??vm的?置
-	3.1	Pin-based VM-execution control:		// 要查看MSR保留位如何?置
-			External-Interrupt exiting		// 是否捕?外部中斷
-			NMI Exiting						// 是否捕?nmi中斷
-			virtual NMI						// 是否捕??擬NMI中斷
-			Activate VMX-Preemption Timer	// 激活搶占式?時器
-			Process posted interrupts		// 
-
-	3.2	Processor-based VM-execution control //分為主要字段 及 次要字段	
-	 3.2.1	Primary Process-based VM-exec. control(32bit):		//主要字段
-
-			 bit[2]:  Interrupt-Window				//任意指令RFLAGS.IF = 1 以及?有屏蔽中斷則陷入VMM
-			 bit[3]:  Use TSC offseting				//MSR時?寄存器相?
-			 bit[7]:  HLT exiting					//執行HLT指令時 , 是否發生VMEXIT(陷入VMM)
-			 bit[9]:  INVLPG exiting				//同上
-			 bit[10]: MWAIT exiting					//同上
-			 bit[11]: RDPMC exiting					//同上
-			 bit[12]: RDTSX exitng					//同上
-			 bit[15]: CR-3 loading					//寫入CR3的值,是否發生VMEXIT
-			 bit[16]: CR-3 store						//?取CR3的值,是否發生VMEXIT
-			 bit[19]: CR-8 loading					//同上
-			 bit[20]: CR-8 loading					//同上
-			 bit[21]: Use TRP shadow				//是否使用TRP?擬化/ APIC?擬化
-			 bit[22]: NMI-Window exiting				//?有NMI屏蔽時, 任何指令都產生VMEXIT
-			 bit[23]: MOV DR exiting				//執行mov dr 指令 是否發生VMEXIT
-			 bit[24]: Unconditional I/O				//無條件I/O, 是否在執行任意I/O指令時發生VMEXIT
-			 bit[25]: Use I/O bitmap				//I/O位圖 , 如使用I/O bitmap, 則忽略無條件I/O
-			 bit[27]: Monitor trap flag				//是否監?單步異常
-			 bit[28]: Use MSR bitmaps				//是否使用MSR寄存器位圖 來控制RDMSR及WRMSR指令
-			 bit[29]: MONITOR exiting				//執行MONITOR 是否VMEXIT
-			 bit[30]: PAUSE exiting					//執行PAUSE 是否VMEXIT
-			 bit[31]: Activate Secondary Control	//是否使用次要字段(激活ept功能的表)
-
-	 3.2.2	Secondary Process-based VM-exec. control(32bit): //次要字段
-			 bit[0]: Virtual APIC access			//APIC?擬化相?
-			 bit[1]: Enable EPT						//是否啟用EPT?表
-			 bit[2]: Descriptor table exiting		//執行描述符操作時 是否產生VMEXIT
-			 bit[3]: Enable RDTSCP					//執行RDTSCP 是否產生#UD
-			 bit[4]: Virtualize x2APIC				//APIC?擬化相?
-			 bit[5]: Enable VPID					//?擬cpu id 用於緩?對應的?性地址, 提高效率
-			 bit[6]: WBINVD exiting					//WBINVD指令 是否產生VMEXIT
-			 bit[7]: Unrestricted guest				//決定客戶機可以?行在非分?保?模式 或 實模式
-			 bit[8]: APIC-register virtualization   //APIC?擬化相?
-			 bit[9]: Virtual-interrupt delivery		//中斷?擬化 以及模疑寫入APIC的寄存器 控制中斷優先級
-			 bit[10]: PAUSE-loop exiting				//
-			 bit[11]: RDRAND exiting				//執行RDRAND  是否產生VMEXIT
-			 bit[12]: Enable INVPCID				//執行INVPCID 是否產生#UD異常
-			 bit[13]: Enable VM function			//是否啟動VMFUNC
-			 bit[14]: VMCS Shadowing				//VMREAD/VMWRITE ?問影子VMCS
-			 bit[16]: RDSEED exiting				//RDSEED 是否產生VMEXIT
-			 bit[17]: Enable PML					//是否啟用Page-modification log, ?問內存時?置dirty bit
-			 bit[18]: EPT-violation (#VE)			//?問的?擬物理地址 ?有在EPT中找到(一?始只有?續的內存塊存放到EPT?表)
-			 bit[20]: Enable XSAVES/SRSTORS			//XSAVES/XRSTORS 是否產生#UD異常
-			 bit[25]: Use TSC scaling				//執行RDTSC/RDTSCR/RDMSR指令, 是否返回被修改的值
-	3.3 Exception Bitmap(32bit)							//異常位圖, 異常發生時->在32bit?出1位, 如??位的值是1, 異常則產生VMEXIT, 否則正常地由IDT?理
-	3.6 VM-Function Controls(64bit)					    //次要字段:Enable VM function = 1 , 以及?置功能?時使用(除功能?外其他置0)
-	3.7 I/O Bitmap Address(64bit physical address) A/B  //use I/O bitmaps  = 1 時使用
-			A包含: 0000~07fff 
-			B包含: 8000~fffff
-	3.8 Time-stamp Counter Offset and Multipler	(64bit)	//跟時?有?係
-	3.9 Guest/Host masks CR0/CR4						//寫入CR0/CR4 的mask ?寫入?擁有?寫??寄存器的權
-	3.10 read shadow for CR0/CR4(32/64bit)				//?取cr0 或cr3,?取的時侯,返回對應的read shadow中的值
-	3.11 CR3-Target controls(32/64bit)					//有4?cr3-target values 以及 1?cr3-target count
-														//CR3-count = N, 等如只考?首N?CR3 是否一樣, 如果一樣,則陷入VMM
-														//CR3-count = 0, 則寫入CR3時無條件發生VMEXIT, 陷入VMM
-  3.12 Control for APIC Virtualization
-		物理上:
-		  - LAPIC如果在xAPIC模式, 則可以透?內存映射?問LAPIC寄存器, 其物理地址在IA32_APIC_BASE MSR
-		  - LAPIC如果在x2APIC模式, 則可以透?RDMSR或WRMSR?寫LAPIC寄存器
-		  - 64位模式, 可以使用MOV CR8, ?問TPR
-		?擬上:
-			APIC-access Address(64bits)					//如virtualize APIC accesses = 1 時生效 , = 0 則不存在
-			Virtual-APIC Address(64bits)					//如上,及Use TPR shadow = 1(只存在於?樣?置的CPU核心)
-														//但地址指向4kb的物理地址,為?擬APIC? 
-														//用於?擬化中斷 和?寫APIC寄存器
-			TPR threshold(32bits)						//如
-
-  3.13 MSR-Bitmap address								//Use MSR bitmap = 1, 如?寫msr時, ecx在範圍內 則產生VMEXIT 陷入VMM
-		Read bitmap for low MSRs  [000000000~00001FFF]  
-		Read bitmap for high MSRs [C00000000~C0001FFF]
-		Write bitmap for low MSRs [000000000~00001FFF]
-		Write bitmap for high MSRs[C00000000~C0001FFF] 
-  3.14 Executive-VMCS Pointer							//用於SMM+SMI ???用
-  3.15 EPT Pointer(64bits)								//enable EPT = 1 時有效
-		bit[2:0] - Memory Type							//EPT?型: 6-回寫/0-不可緩? , 應查看MSR IA32_VMX_EPT_VPID_CAP 支持的EPT?型
-		bit[5:3] - Page walk lenght						//EPT總層數
-		bit[6]   - enabled accesses/dirty bit			//上面解?了, 不是所有CPU支持??功能,  應查看MSR 同上
-		bit[11:7]- 保留為								//清0
-		bit[N-1:12] - 4KB對?的PML4物理地址				//N代表是否物理地址寬度, 例如EAX的物理地址寬度為[7:0] 
-  3.16 VPID												//?擬cpu的id,用於清除TLB緩??
-  3.17 Control for PAUSE-Loop exit(32bit field)			//PLE_GAP / PLE_WINDOW
-  3.17 Page-Modification Logging(64bit address)			//次要字段:Enable PML = 1 時使用
-  3.18 VM Function Control								//控制?用的VM函數, 比如?用?為0 那就把0位?置為1 其他置0
-  3.19 vmcs shadowing bitmap address(64bit physical addr)// VMCS Shadowing = 1, vmread / vmwrite ?問??地址 而不是原?的vmcs
-  3.20 Virtualization Exception							//包含地址,??描述的地址,eptp index : 發生??的eptp索引
-  3.21 xss-exiting bitmap								//enable XSAVES/XRSTORES = 1, 則使用他們時會?問??BITMAP 而不是xss寄存器
-  * 5. VM-exit control fields							
-				
-  * 6. VM-entry control feilds
-
-  * 7. VM-exit information fields
-  */
-
-  //根據?整MSR的
   VmxVmEntryControls vm_entryctl = {VmpAdjustControlValue(
       (use_true_msrs) ? Msr::kIa32VmxTrueEntryCtls : Msr::kIa32VmxEntryCtls,
       vm_entryctl_requested.all)};
@@ -804,32 +593,29 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
                                             : Msr::kIa32VmxPinbasedCtls,
                             vm_pinctl_requested.all)};
 
-  //第一層Processor-based vm-Execution字段的自定義?置
   VmxProcessorBasedControls vm_procctl_requested = {};
-  vm_procctl_requested.fields.invlpg_exiting = false;	 //?用陷入INVLPG陷入VMM(INVLPG XXX ?置包含了xxx的TLB?的?面?置為無效時?用)
-  vm_procctl_requested.fields.rdtsc_exiting = false;	 //?取tsc寄存器時陷入vmm
-  vm_procctl_requested.fields.cr3_load_exiting = true;	 //寫入cr3寄存器時陷入vmm
+  vm_procctl_requested.fields.invlpg_exiting = false;	
+  vm_procctl_requested.fields.rdtsc_exiting = false;	
+  vm_procctl_requested.fields.cr3_load_exiting = true;	
   vm_procctl_requested.fields.cr3_store_exiting = true;
-  vm_procctl_requested.fields.cr8_load_exiting = false;  //寫入cr8寄存器時陷入vmm NB: very frequent
-  vm_procctl_requested.fields.mov_dr_exiting = true;	 //寫入drx寄存器時陷入VMM
-  vm_procctl_requested.fields.use_msr_bitmaps = true;	 //使用MSR位圖
+  vm_procctl_requested.fields.cr8_load_exiting = false; 
+  vm_procctl_requested.fields.mov_dr_exiting = true;	
+  vm_procctl_requested.fields.use_msr_bitmaps = true;	
   vm_procctl_requested.fields.activate_secondary_control = true;
 
-  //?置第一層Processor-based vm-Execution字段, 把上面的?置存放好
   VmxProcessorBasedControls vm_procctl = {
       VmpAdjustControlValue((use_true_msrs) ? Msr::kIa32VmxTrueProcBasedCtls
                                             : Msr::kIa32VmxProcBasedCtls,
                             vm_procctl_requested.all)};
 
-  //第二層Processor-based vm-Execution字段的自定義?置
   VmxSecondaryProcessorBasedControls vm_procctl2_requested = {};
-  vm_procctl2_requested.fields.enable_ept = true;	  //啟用ept
-  vm_procctl2_requested.fields.enable_rdtscp = true;  //Required for Win10
-  vm_procctl2_requested.fields.descriptor_table_exiting = true; //報行段?擇子時陷入vmm
+  vm_procctl2_requested.fields.enable_ept = true;	  
+  vm_procctl2_requested.fields.enable_rdtscp = true;  
+  vm_procctl2_requested.fields.descriptor_table_exiting = true;
 
-  // required for Win10 , 如果??位為0 , 引發#UD異常
+
   vm_procctl2_requested.fields.enable_xsaves_xstors = true;
-  // ?置第二層Processor-based vm-Execution字段
+ 
   VmxSecondaryProcessorBasedControls vm_procctl2 = {VmpAdjustControlValue(Msr::kIa32VmxProcBasedCtls2, vm_procctl2_requested.all)};
 
   // Set up CR0 and CR4 bitmaps
@@ -845,7 +631,6 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   // CR0.NW, CR0.PG, CR4.PAE, CR4.PGE, CR4.PSE, or CR4.SMEP; then the PDPTEs are
   // loaded from the address in CR3.
 
-  // 是否PAE模式, 如果是PAE模式 則?置以下位
   if (UtilIsX86Pae()) {
     cr0_mask.fields.pg = true;
     cr0_mask.fields.cd = true;
@@ -855,7 +640,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
     cr4_mask.fields.pse = true;
     cr4_mask.fields.smep = true;
   }
-  //移位只#BP異常才陷入
+
   const auto exception_bitmap =
       1 << InterruptionVector::kBreakpointException |
       1 << InterruptionVector::kGeneralProtectionException |
@@ -867,7 +652,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   /* 16-Bit Control Field */
 
   /* 16-Bit Guest-State Fields */
-  /*保存所有段?擇子*/
+
   auto error = VmxStatus::kOk;
   error |= UtilVmWrite(VmcsField::kGuestEsSelector, AsmReadES());
   error |= UtilVmWrite(VmcsField::kGuestCsSelector, AsmReadCS());
@@ -880,7 +665,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
 
   /* 16-Bit Host-State Fields */
   // RPL and TI have to be 0
-  /*保存所有段選擇子 但RPL / TI位置0 (未知原因)*/ 
+
   error |= UtilVmWrite(VmcsField::kHostEsSelector, AsmReadES() & 0xf8);
   error |= UtilVmWrite(VmcsField::kHostCsSelector, AsmReadCS() & 0xf8);
   error |= UtilVmWrite(VmcsField::kHostSsSelector, AsmReadSS() & 0xf8);
@@ -890,11 +675,11 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kHostTrSelector, AsmReadTR() & 0xf8);
 
   /* 64-Bit Control Fields */
-  /* 自定義MSR + 自定義EPT */
+
   error |= UtilVmWrite64(VmcsField::kIoBitmapA, 0);
   error |= UtilVmWrite64(VmcsField::kIoBitmapB, 0);	
-  error |= UtilVmWrite64(VmcsField::kMsrBitmap, UtilPaFromVa(processor_data->shared_data->msr_bitmap));	//有使用自己一套msr
-  error |= UtilVmWrite64(VmcsField::kEptPointer, EptGetEptPointer(processor_data->ept_data));			//使用自己ept(??是剛剛初始化即?續的內存的ept)
+  error |= UtilVmWrite64(VmcsField::kMsrBitmap, UtilPaFromVa(processor_data->shared_data->msr_bitmap));	
+  error |= UtilVmWrite64(VmcsField::kEptPointer, EptGetEptPointer(processor_data->ept_data));			
 
   /* 64-Bit Guest-State Fields */
   error |= UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64);//不使用影子VMCS
@@ -905,22 +690,21 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
 
   /* 32-Bit Control Fields */
 
-  error |= UtilVmWrite(VmcsField::kPinBasedVmExecControl, vm_pinctl.all);		//使用??值
-  error |= UtilVmWrite(VmcsField::kCpuBasedVmExecControl, vm_procctl.all);		//主要字段, 包含自定義?定
-  error |= UtilVmWrite(VmcsField::kExceptionBitmap, exception_bitmap);			//自己?理異唷
+  error |= UtilVmWrite(VmcsField::kPinBasedVmExecControl, vm_pinctl.all);		
+  error |= UtilVmWrite(VmcsField::kCpuBasedVmExecControl, vm_procctl.all);		
+  error |= UtilVmWrite(VmcsField::kExceptionBitmap, exception_bitmap);			
   error |= UtilVmWrite(VmcsField::kPageFaultErrorCodeMask, 0);					
   error |= UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, 0);					
-  error |= UtilVmWrite(VmcsField::kCr3TargetCount, 0);							//**所有cr3都要捕?**
-  error |= UtilVmWrite(VmcsField::kVmExitControls, vm_exitctl.all);				//EXIT CONTROL自定義了向應中斷
+  error |= UtilVmWrite(VmcsField::kCr3TargetCount, 0);							
+  error |= UtilVmWrite(VmcsField::kVmExitControls, vm_exitctl.all);				
   error |= UtilVmWrite(VmcsField::kVmExitMsrStoreCount, 0);
   error |= UtilVmWrite(VmcsField::kVmExitMsrLoadCount, 0);
-  error |= UtilVmWrite(VmcsField::kVmEntryControls, vm_entryctl.all);			//返回時做的事, ??值
+  error |= UtilVmWrite(VmcsField::kVmEntryControls, vm_entryctl.all);			
   error |= UtilVmWrite(VmcsField::kVmEntryMsrLoadCount, 0);
   error |= UtilVmWrite(VmcsField::kVmEntryIntrInfoField, 0);
-  error |= UtilVmWrite(VmcsField::kSecondaryVmExecControl, vm_procctl2.all);	//?置次要字段
+  error |= UtilVmWrite(VmcsField::kSecondaryVmExecControl, vm_procctl2.all);	
 
   /* 32-Bit Guest-State Fields */
-  /* 初始化客戶的段選擇子的32位的大小,權限 */
   error |= UtilVmWrite(VmcsField::kGuestEsLimit, GetSegmentLimit(AsmReadES()));	
   error |= UtilVmWrite(VmcsField::kGuestCsLimit, GetSegmentLimit(AsmReadCS()));
   error |= UtilVmWrite(VmcsField::kGuestSsLimit, GetSegmentLimit(AsmReadSS()));
@@ -941,24 +725,23 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kGuestTrArBytes, VmpGetSegmentAccessRight(AsmReadTR()));
   error |= UtilVmWrite(VmcsField::kGuestInterruptibilityInfo, 0);
   error |= UtilVmWrite(VmcsField::kGuestActivityState, 0);
-  error |= UtilVmWrite(VmcsField::kGuestSysenterCs, UtilReadMsr(Msr::kIa32SysenterCs));	   //代碼段 XP下為0
+  error |= UtilVmWrite(VmcsField::kGuestSysenterCs, UtilReadMsr(Msr::kIa32SysenterCs));	  
   
   /* 32-Bit Host-State Field */
-  error |= UtilVmWrite(VmcsField::kHostIa32SysenterCs, UtilReadMsr(Msr::kIa32SysenterCs)); //同上
+  error |= UtilVmWrite(VmcsField::kHostIa32SysenterCs, UtilReadMsr(Msr::kIa32SysenterCs)); 
 
   /* Natural-Width Control Fields */
-  error |= UtilVmWrite(VmcsField::kCr0GuestHostMask, cr0_mask.all);	//?置客戶機的CR0 MASK 為0, 即?有?寫權
-  error |= UtilVmWrite(VmcsField::kCr4GuestHostMask, cr4_mask.all); //同上
-  error |= UtilVmWrite(VmcsField::kCr0ReadShadow, __readcr0());		//當前CR0
-  error |= UtilVmWrite(VmcsField::kCr4ReadShadow, __readcr4());		//當前CR4
+  error |= UtilVmWrite(VmcsField::kCr0GuestHostMask, cr0_mask.all);
+  error |= UtilVmWrite(VmcsField::kCr4GuestHostMask, cr4_mask.all);
+  error |= UtilVmWrite(VmcsField::kCr0ReadShadow, __readcr0());		
+  error |= UtilVmWrite(VmcsField::kCr4ReadShadow, __readcr4());		
 
   /* Natural-Width Guest-State Fields */
   //保存cr0 , cr3 , cr4
-  error |= UtilVmWrite(VmcsField::kGuestCr0, __readcr0());			//?入客戶CR0
-  error |= UtilVmWrite(VmcsField::kGuestCr3, __readcr3());			//?入客戶CR3
-  error |= UtilVmWrite(VmcsField::kGuestCr4, __readcr4());			//?入客戶CR4
-#if defined(_AMD64_)												//以下都是64位數值
-  //保存客戶機段?擇子的基址
+  error |= UtilVmWrite(VmcsField::kGuestCr0, __readcr0());			
+  error |= UtilVmWrite(VmcsField::kGuestCr3, __readcr3());			
+  error |= UtilVmWrite(VmcsField::kGuestCr4, __readcr4());			
+#if defined(_AMD64_)												
   error |= UtilVmWrite(VmcsField::kGuestEsBase, 0);					
   error |= UtilVmWrite(VmcsField::kGuestCsBase, 0);
   error |= UtilVmWrite(VmcsField::kGuestSsBase, 0);
@@ -974,16 +757,15 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kGuestGsBase, VmpGetSegmentBase(gdtr.base, AsmReadGS()));
 #endif
 
-  //以下 保存客戶機所有上下文 用於VMENTRY時恢復
   error |= UtilVmWrite(VmcsField::kGuestLdtrBase, VmpGetSegmentBase(gdtr.base, AsmReadLDTR()));
   error |= UtilVmWrite(VmcsField::kGuestTrBase, VmpGetSegmentBase(gdtr.base, AsmReadTR()));
-  error |= UtilVmWrite(VmcsField::kGuestGdtrBase, gdtr.base);				//寫入GDT基址
-  error |= UtilVmWrite(VmcsField::kGuestIdtrBase, idtr.base);				//寫入IDT基址
-  error |= UtilVmWrite(VmcsField::kGuestDr7, __readdr(7));					//寫入當前CPU DR7寄存器
-  error |= UtilVmWrite(VmcsField::kGuestRsp, guest_stack_pointer);			//寫入客戶機?入VMX前的rsp
-  error |= UtilVmWrite(VmcsField::kGuestRip, guest_instruction_pointer);	//寫入客戶機?入VMX前的rip
-  error |= UtilVmWrite(VmcsField::kGuestRflags, __readeflags());			//寫入客戶機的RLAGS
-  error |= UtilVmWrite(VmcsField::kGuestSysenterEsp, UtilReadMsr(Msr::kIa32SysenterEsp));//客戶機的系統?用ESP 及EIP	
+  error |= UtilVmWrite(VmcsField::kGuestGdtrBase, gdtr.base);				
+  error |= UtilVmWrite(VmcsField::kGuestIdtrBase, idtr.base);				
+  error |= UtilVmWrite(VmcsField::kGuestDr7, __readdr(7));					
+  error |= UtilVmWrite(VmcsField::kGuestRsp, guest_stack_pointer);			
+  error |= UtilVmWrite(VmcsField::kGuestRip, guest_instruction_pointer);	
+  error |= UtilVmWrite(VmcsField::kGuestRflags, __readeflags());			
+  error |= UtilVmWrite(VmcsField::kGuestSysenterEsp, UtilReadMsr(Msr::kIa32SysenterEsp));
   error |= UtilVmWrite(VmcsField::kGuestSysenterEip, UtilReadMsr(Msr::kIa32SysenterEip));
 
   /* Natural-Width Host-State Fields */
@@ -1003,9 +785,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kHostIdtrBase, idtr.base);
   error |= UtilVmWrite(VmcsField::kHostIa32SysenterEsp, UtilReadMsr(Msr::kIa32SysenterEsp));
   error |= UtilVmWrite(VmcsField::kHostIa32SysenterEip, UtilReadMsr(Msr::kIa32SysenterEip));
-  //給定的棧空?
   error |= UtilVmWrite(VmcsField::kHostRsp, vmm_stack_pointer);
-  //?置VMEXIT回?函數(匯編實現)
   error |= UtilVmWrite(VmcsField::kHostRip, reinterpret_cast<ULONG_PTR>(AsmVmmEntryPoint));
   // clang-format on
 

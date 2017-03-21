@@ -34,16 +34,16 @@
 //
 
 
-struct SharedShadowHookData;
+struct ShareDataContainer;
 
-extern SharedShadowHookData* sharedata;
+extern ShareDataContainer* sharedata;
 ////////////////////////////////////////////////////////////////////////////////
 //
 // prototypes
 //
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS
-    NoTruthInitialization(_In_ SharedShadowHookData* shared_sh_data);
+    NoTruthInitialization(_In_ ShareDataContainer* shared_sh_data);
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void NoTruthTermination();
 

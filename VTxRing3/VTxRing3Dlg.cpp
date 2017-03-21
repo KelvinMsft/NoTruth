@@ -207,7 +207,7 @@ cDrvCtrl drv;
 void CVTxRing3Dlg::OnBnClickedOk()
 {
 	CString err;
-	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest2", "NoTruthtest2")) {
+	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest3", "NoTruthtest3")) {
 		if (drv.Start())
 		{
 			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");

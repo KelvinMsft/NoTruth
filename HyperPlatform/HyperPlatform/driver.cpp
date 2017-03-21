@@ -88,10 +88,10 @@ _IRQL_requires_max_(PASSIVE_LEVEL) bool DriverpIsSuppoetedOS();
 //
 //--------------------------------------------------------------------------------------//
 NTSTATUS DispatchHideEngineIOCTL(
-			IN PVOID InputBuffer,				//輸入
-			IN ULONG InputBufferLength,			//輸入buffer大小
-			IN PVOID OutputBuffer,				//輸出
-			IN ULONG OutputBufferLength,		//輸出buffer大小
+			IN PVOID InputBuffer,				
+			IN ULONG InputBufferLength,			
+			IN PVOID OutputBuffer,				
+			IN ULONG OutputBufferLength,		
 			IN ULONG IoControlCode,
 			IN PIO_STATUS_BLOCK pIoStatus)
 {
@@ -165,13 +165,13 @@ NTSTATUS DDI_devCtrlRoutine(
 
 		//
 		DbgPrint("[$XTR] IRP_MJ_DEVICE_CONTROL->IrpMjXTRdevCtrlRoutine(DeviceObject=0x%08x, Irp=0x%08x)->ARKioControl().\n", DeviceObject, Irp);
-		//io控制函数
-		DispatchHideEngineIOCTL(inputBuffer,	//输入缓冲区
-			inputBufferLength,		//输入缓冲区大小
-			outputBuffer,			//输出缓冲区
-			outputBufferLength,		//输出缓冲区大小
-			ioControlCode,			//功能号
-			ioStatus);				//IRP的IO状态
+
+		DispatchHideEngineIOCTL(inputBuffer,	
+			inputBufferLength,		
+			outputBuffer,			
+			outputBufferLength,		
+			ioControlCode,			
+			ioStatus);				
 		break;
 	}
 
@@ -247,7 +247,6 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Initialize utility functions
-  //初始化所有內存塊, VM初始化EPT時侯會使用到
   status = UtilInitialization(driver_object);
   if (!NT_SUCCESS(status)) {
     PerfTermination();

@@ -1000,9 +1000,7 @@ _Use_decl_annotations_ static void VmmpHandleEptViolation(
   HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
   auto processor_data = guest_context->stack->processor_data;
 
-  //DbgPrint("EPT Violation Current CR3: 0x%08x Guest CR3: 0x%08x", __readcr3(), UtilVmRead64(VmcsField::kGuestCr3));
-  
-  EptHandleEptViolation(
+   EptHandleEptViolation(
       processor_data->ept_data, 
 	  processor_data->sh_data,
       processor_data->shared_data->shared_sh_data);
