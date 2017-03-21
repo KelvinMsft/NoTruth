@@ -13,7 +13,7 @@
 #include "log.h"
 #include "util.h"
 #include "vmm.h"
-#include "../../NoTruth/ddi_mon.h"
+#include "../../NoTruth/NoTruth.h"
 #include "../../NoTruth/shadow_hook.h"
 
 extern "C" {

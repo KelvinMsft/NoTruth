@@ -5,7 +5,7 @@
 /// @file
 /// Implements NoTruth functions.
 
-#include "ddi_mon.h"
+#include "NoTruth.h"
 #include <ntimage.h>
 #define NTSTRSAFE_NO_CB_FUNCTIONS
 #include <ntstrsafe.h>

@@ -17,7 +17,7 @@
 #define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 #endif  // HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER
 #include "performance.h"
-#include "../../NoTruth/ddi_mon.h"
+#include "../../NoTruth/NoTruth.h"
 struct Page1 {
 	UCHAR* page;
 	Page1();

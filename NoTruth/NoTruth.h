@@ -5,8 +5,8 @@
 /// @file
 /// @brief Declares interfaces to NoTruth functions.
 
-#ifndef NoTruth_DDI_MON_H_
-#define NoTruth_DDI_MON_H_
+#ifndef NoTruth_NoTruth_H_
+#define NoTruth_NoTruth_H_
 
 #include <fltKernel.h>
 
@@ -62,4 +62,4 @@ VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 address);
 // implementations
 //
 
-#endif  // NoTruth_DDI_MON_H_
+#endif  // NoTruth_NoTruth_H_

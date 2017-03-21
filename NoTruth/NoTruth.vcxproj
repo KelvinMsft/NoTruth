@@ -147,7 +147,7 @@
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp" />
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vmm.cpp" />
     <ClCompile Include="cs_driver_mm.c" />
-    <ClCompile Include="ddi_mon.cpp" />
+    <ClCompile Include="NoTruth.cpp" />
     <ClCompile Include="shadow_hook.cpp" />
     <ClCompile Include="Ring3Hide.cpp" />
   </ItemGroup>
@@ -165,7 +165,7 @@
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vm.h" />
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h" />
     <ClInclude Include="cs_driver_mm.h" />
-    <ClInclude Include="ddi_mon.h" />
+    <ClInclude Include="NoTruth.h" />
     <ClInclude Include="IOCTL.h" />
     <ClInclude Include="shadow_hook.h" />
     <ClInclude Include="Ring3Hide.h" />
