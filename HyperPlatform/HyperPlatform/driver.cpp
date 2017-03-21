@@ -130,7 +130,7 @@ NTSTATUS DDI_devCtrlRoutine(
 	deviceExtension = (PDEVICE_EXTENSION)DeviceObject->DeviceExtension;
 
 	ioStatus = &Irp->IoStatus;
-	ioStatus->Status = STATUS_SUCCESS;	// Assume success
+	ioStatus->Status = STATUS_SUCCESS;		// Assume success
 	ioStatus->Information = 0;              // Assume nothing returned
 
 											//
@@ -285,10 +285,9 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 	  DbgPrint("[$XTR] IoCreateDevice failed(0x%x).\n", status);
 	  return FALSE;
   }
+   
+  deviceObject->Flags |= DO_BUFFERED_IO;	 
 
-  //设置设备的读写模式
-  deviceObject->Flags |= DO_BUFFERED_IO;	//缓冲区读写
-											//设置设备的扩展数据
   deviceExtension = (PDEVICE_EXTENSION)deviceObject->DeviceExtension;
    
   RtlInitUnicodeString(&dosDeviceName, DDI_DOS_DEVICE_NAME_W);

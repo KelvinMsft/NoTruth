@@ -207,7 +207,7 @@ cDrvCtrl drv;
 void CVTxRing3Dlg::OnBnClickedOk()
 {
 	CString err;
-	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest3", "NoTruthtest3")) {
+	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest4", "NoTruthtest4")) {
 		if (drv.Start())
 		{
 			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
@@ -216,153 +216,36 @@ void CVTxRing3Dlg::OnBnClickedOk()
 			{
 				DWORD oldProtect;
 				ULONG OutBuffer, RetBytes;
-				
-				TRANSFERIOCTL transferData = { 0 };
-				transferData.ProcID = GetCurrentProcessId();
-				transferData.HiddenType = 0x0;
-				VirtualProtect(NtCreateThread, sizeof(UCHAR), PAGE_EXECUTE_WRITECOPY, &oldProtect);
-				transferData.Address = (ULONG64)NtCreateThread;
-
-
-				VirtualProtect(NtCreateThread, sizeof(UCHAR), oldProtect, NULL);
-				*(PUCHAR)transferData.Address = *(PUCHAR)transferData.Address;
-				err.Format(L"[VTxRing3]ProcID: %x Address1: %X OldValue : %X \r\n", transferData.ProcID, transferData.Address, *(PUCHAR)transferData.Address);
-				OutputDebugString(err);
-
-			
-
-				TRANSFERIOCTL transferData2 = { 0 };
-				DWORD pid = (DWORD)FindProcessId(L"notepad.exe");
-				transferData2.ProcID = pid;
-				transferData2.HiddenType = 0x0;
-				transferData2.Address = (ULONG64)NtCreateFile;			
-				HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-				UCHAR  value = 0;
-				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(value), PAGE_EXECUTE_WRITECOPY, &oldProtect);
-				ReadProcessMemory(handle, (LPVOID)transferData2.Address, &value , sizeof(value),NULL);
-				err.Format(L"[NOTEPAD]ProcID: %x Address1: %X oldValue : %X \r\n", transferData2.ProcID, transferData2.Address, value);
-				OutputDebugString(err);	
-				
-				if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &value , 4, NULL))
-				{
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 4, NULL);
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 4, NULL);
-					OutputDebugStringA("Written process memory \r\n");
-				}
-				else
-				{
-					OutputDebugStringA("written process memory error \r\n");
-				}
-				VirtualProtectEx(handle,(LPVOID)transferData2.Address, sizeof(UCHAR), oldProtect, NULL);
-				 
-
-				if (!pid)
-				{ 
-					transferData2 = { 0 };
-				}  
-				
-				if (drv.Open("\\\\.\\NoTruth"))	
-				{
-
-					if(transferData2.Address && transferData2.ProcID)
-					if (!drv.IoControl(IOCTL_HIDE, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
-					{
-						AfxMessageBox(L"Cannot IOCTL device \r\n");
-					}
-					UCHAR bp   = 0xCC;
-					UCHAR retv =  0x0;
-					if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &bp, sizeof(UCHAR), NULL))
-					{
-						OutputDebugStringA("Written process memory1 \r\n");
-						ReadProcessMemory(handle, (PVOID)transferData2.Address, &retv, sizeof(UCHAR), NULL);
-						err.Format(L"[notepad]ProcID: %x Address1: %X newValue : %X \r\n", transferData2.ProcID, transferData2.Address, *(PUCHAR)transferData2.Address);
-						OutputDebugString(err);
-					}
-					else
-					{
-						//err.Format(L"Write process ERROR : %X \r\n", GetLastError());
-						//OutputDebugString(err);
-					}
-					
-					if (!drv.IoControl(IOCTL_HIDE, &transferData, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
-					{
-						AfxMessageBox(L"Cannot IOCTL device \r\n");
-					}
-					*(PUCHAR)transferData.Address = 0xCC;
-					err.Format(L"[VTxRing3]ProcID: %x Address1: %X newValue : %X \r\n", transferData.ProcID, transferData.Address, *(PUCHAR)transferData.Address);
-					OutputDebugString(err);  
-
-				
-				}
-				else
-				{
-					AfxMessageBox(L"Cannot open device \r\n");
-				}
-
-				CloseHandle(handle);
-				CloseHandle(drv.m_hDriver);
-			}
-		}
-		else 
-		{	
-			err.Format(L"Cannot start driver ERR 2 : %X \r\n", GetLastError());		
-			AfxMessageBox(err);
-		}
-	}
-	else 
-	{ 
-		if (drv.Start())
-		{
-			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-			PVOID NtCreateFile = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
-			if (NtCreateThread)
-			{
-				DWORD oldProtect;
-				ULONG OutBuffer, RetBytes;
-
-				TRANSFERIOCTL transferData = { 0 };
-				transferData.ProcID = GetCurrentProcessId();
-				transferData.HiddenType = 0x0;
-				VirtualProtect(NtCreateThread, sizeof(UCHAR), PAGE_EXECUTE_WRITECOPY, &oldProtect);
-				transferData.Address = (ULONG64)NtCreateThread;
-				VirtualProtect(NtCreateThread, sizeof(UCHAR), oldProtect, NULL);
-
-				err.Format(L"ProcID: %x Address1: %X OldValue : %X \r\n", transferData.ProcID, transferData.Address, *(PULONG)transferData.Address);
-				OutputDebugString(err);
-
 				TRANSFERIOCTL transferData2 = { 0 };
 				DWORD pid = (DWORD)FindProcessId(L"notepad.exe");
 				transferData2.ProcID = pid;
 				transferData2.HiddenType = 0x0;
 				transferData2.Address = (ULONG64)NtCreateFile;
-
-				*(PUCHAR)transferData.Address = *(PUCHAR)transferData.Address;
-
-				ULONG  value = *(PULONG)transferData2.Address;
-
 				HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-				SIZE_T retsize;
-				err.Format(L"[NOTEPAD]ProcID: %x Address1: %X newValue : %X \r\n", transferData.ProcID, transferData2.Address, *(PULONG)transferData2.Address);
+				UCHAR  value = 0;
+				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(value), PAGE_EXECUTE_WRITECOPY, &oldProtect);
+				ReadProcessMemory(handle, (LPVOID)transferData2.Address, &value, sizeof(value), NULL);
+				err.Format(L"[NOTEPAD]ProcID: %x Address1: %X oldValue : %X \r\n", transferData2.ProcID, transferData2.Address, value);
 				OutputDebugString(err);
-				if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 4, NULL))
-				{
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 4, NULL);
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 4, NULL);
 
+				if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL))
+				{
+					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL);
+					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL);
 					OutputDebugStringA("Written process memory \r\n");
 				}
 				else
 				{
 					OutputDebugStringA("written process memory error \r\n");
 				}
-				CloseHandle(handle);
+				
+				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(UCHAR), oldProtect, NULL);
+
 
 				if (!pid)
 				{
 					transferData2 = { 0 };
 				}
-				err.Format(L"ProcID: %x Address2: %X", transferData2.ProcID, transferData2.Address);
-				OutputDebugString(err);
 
 				if (drv.Open("\\\\.\\NoTruth"))
 				{
@@ -372,41 +255,28 @@ void CVTxRing3Dlg::OnBnClickedOk()
 						{
 							AfxMessageBox(L"Cannot IOCTL device \r\n");
 						}
-					if (!drv.IoControl(IOCTL_HIDE, &transferData, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
+					UCHAR bp = 0xCC;
+					UCHAR retv = 0x0;
+					if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &bp, sizeof(UCHAR), NULL))
 					{
-						AfxMessageBox(L"Cannot IOCTL device \r\n");
-					}
-					ULONG bp = 0xCCCCCCCC;
-					ULONG retv = 0;
-					if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &bp, 4, NULL))
-					{
-						//OutputDebugStringA("Written process memory \r\n");
-						ReadProcessMemory(handle, (PVOID)transferData2.Address, &retv, 4, NULL);
-						err.Format(L"[notepad]ProcID: %x Address1: %X newValue : %X \r\n", transferData2.ProcID, transferData2.Address, *(PULONG)transferData2.Address);
+						OutputDebugStringA("Written process memory1 \r\n");
+						ReadProcessMemory(handle, (PVOID)transferData2.Address, &retv, sizeof(UCHAR), NULL);
+						err.Format(L"[notepad]ProcID: %x Address1: %X newValue : %X \r\n", transferData2.ProcID, transferData2.Address, *(PUCHAR)transferData2.Address);
 						OutputDebugString(err);
 					}
-					else
-					{
-						OutputDebugStringA("written process memory error \r\n");
-					}
-
-					*(PUCHAR)transferData.Address = 0xCC;
-					err.Format(L"[VTxRing3]ProcID: %x Address1: %X newValue : %X \r\n", transferData.ProcID, transferData.Address, *(PULONG)transferData.Address);
-					OutputDebugString(err);
-
-
-
 				}
 				else
 				{
 					AfxMessageBox(L"Cannot open device \r\n");
 				}
+
+				CloseHandle(handle);
 				CloseHandle(drv.m_hDriver);
 			}
-	}
+		}
 		else
 		{
-			err.Format(L"Cannot start driver ERR 1 : %X \r\n", GetLastError());
+			err.Format(L"Cannot start driver ERR 2 : %X \r\n", GetLastError());
 			AfxMessageBox(err);
 		}
 	}

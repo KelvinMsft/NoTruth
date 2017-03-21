@@ -78,7 +78,7 @@ static HideInformation* ShpFindHideByAddress(
 static void kEnableEntryForExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
 
 //Come from Reading, independent page
-static void kEnableEntryForReadAndExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
+static void kEnableEntryForReadOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
 
 //Come from Write,  reset page for exec. and shared page with exec.
 static void kEnableEntryForAll(_In_ const HideInformation& info , _In_ EptData* ept_data);
@@ -294,7 +294,6 @@ _Use_decl_annotations_ bool ShHandleBreakpoint(
 }
 //------------------------------------------------------------------------//
 // Handles MTF VM-exit. Re-enables the shadow hook and clears MTF.
-PKAPC_STATE apc;
 _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
     ShadowHookData* sh_data, 
 	ShareDataContainer* shared_sh_data,
@@ -306,7 +305,7 @@ _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
 
 	if(!sh_data->IsKernelMemory)
 	{
-		const auto info = kRestoreLastHideInfo(sh_data);//get back last written EPT-Pte
+		const auto info = kRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
 		kEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	 
 	}
 
@@ -328,10 +327,10 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 	bool IsRead
 )
 { 
-	KeAcquireInStackQueuedSpinLockAtDpcLevel(
+	 KeAcquireInStackQueuedSpinLockAtDpcLevel(
 		&shared_sh_data->SpinLock, 
 		&shared_sh_data->LockHandle
-	);
+	); 
 
 	if (!IsUserModeHideActive(shared_sh_data)) 
 	{
@@ -345,14 +344,17 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 		return false;
 	}
 
+	//Read in single page
 	if (IsRead)
 	{
-		kEnableEntryForReadAndExecuteOnly(*info, ept_data);
+		kEnableEntryForReadOnly(*info, ept_data);
 		//Set MTF flags 
 		ShpSetMonitorTrapFlag(sh_data, true);
 		//used for reset read-only
 		kSaveLastHideInfo(sh_data, *info);
 	}
+
+	//Write,Execute in same page
 	if (IsWrite)
 	{		
 		//Set R/W/!X for RING3/ RING0
@@ -363,7 +365,7 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 		kSaveLastHideInfo(sh_data, *info);
 
 	}
-
+	 
 	KeReleaseSpinLockFromDpcLevel(&shared_sh_data->SpinLock);
 	//after return to Guset OS, run a single instruction --> and trap into VMM again
  return true;
@@ -495,14 +497,14 @@ _Use_decl_annotations_ static void kEnableEntryForAll(const HideInformation& inf
 	UtilInveptAll();
 }
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kEnableEntryForReadAndExecuteOnly(const HideInformation& info, EptData* ept_data)
+_Use_decl_annotations_ static void kEnableEntryForReadOnly(const HideInformation& info, EptData* ept_data)
 {
 	if (info.isRing3)
 	{
 		// ring-3 start 
 		ULONG64 newPA = 0;
 		GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
-		ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_rw, TRUE, FALSE, TRUE);
+		ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_rw, TRUE, FALSE, FALSE);
 		// ring-3 end
 	}
 	UtilInveptAll();
