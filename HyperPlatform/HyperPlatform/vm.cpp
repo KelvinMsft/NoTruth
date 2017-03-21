@@ -13,8 +13,8 @@
 #include "log.h"
 #include "util.h"
 #include "vmm.h"
-#include "../../DdiMon/ddi_mon.h"
-#include "../../DdiMon/shadow_hook.h"
+#include "../../NoTruth/ddi_mon.h"
+#include "../../NoTruth/shadow_hook.h"
 
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
@@ -179,7 +179,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     return status;
   }
   sharedata = reinterpret_cast<SharedShadowHookData*>(shared_data->shared_sh_data);
-  status = DdimonInitialization(shared_data->shared_sh_data);
+  status = NoTruthInitialization(shared_data->shared_sh_data);
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
@@ -1141,7 +1141,7 @@ _Use_decl_annotations_ static void VmpVmxOffThreadRoutine(void *start_context) {
   PAGED_CODE();
 
   HYPERPLATFORM_LOG_INFO("Uninstalling VMM.");
-  DdimonTermination();
+  NoTruthTermination();
   auto status = UtilForEachProcessor(VmpStopVM, nullptr);
   if (NT_SUCCESS(status)) {
     HYPERPLATFORM_LOG_INFO("The VMM has been uninstalled.");

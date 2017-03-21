@@ -1,5 +1,5 @@
 ;
-; DdiMon.inf
+; NoTruth.inf
 ;
 
 [Version]
@@ -7,7 +7,7 @@ Signature="$WINDOWS NT$"
 Class=Sample ; TODO: edit Class
 ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ; TODO: edit ClassGuid
 Provider=%ManufacturerName%
-CatalogFile=DdiMon.cat
+CatalogFile=NoTruth.cat
 DriverVer= ; TODO: set DriverVer in stampinf property pages
 
 [DestinationDirs]
@@ -26,7 +26,7 @@ HKR,,Icon,,-5
 1 = %DiskName%,,,""
 
 [SourceDisksFiles]
-DdiMon.sys  = 1,,
+NoTruth.sys  = 1,,
 
 ;*****************************************
 ; Install Section
@@ -36,55 +36,55 @@ DdiMon.sys  = 1,,
 %ManufacturerName%=Standard,NT$ARCH$
 
 [Standard.NT$ARCH$]
-%DdiMon.DeviceDesc%=DdiMon_Device, Root\DdiMon ; TODO: edit hw-id
+%NoTruth.DeviceDesc%=NoTruth_Device, Root\NoTruth ; TODO: edit hw-id
 
-[DdiMon_Device.NT]
+[NoTruth_Device.NT]
 CopyFiles=Drivers_Dir
 
 [Drivers_Dir]
-DdiMon.sys
+NoTruth.sys
 
 ;-------------- Service installation
-[DdiMon_Device.NT.Services]
-AddService = DdiMon,%SPSVCINST_ASSOCSERVICE%, DdiMon_Service_Inst
+[NoTruth_Device.NT.Services]
+AddService = NoTruth,%SPSVCINST_ASSOCSERVICE%, NoTruth_Service_Inst
 
-; -------------- DdiMon driver install sections
-[DdiMon_Service_Inst]
-DisplayName    = %DdiMon.SVCDESC%
+; -------------- NoTruth driver install sections
+[NoTruth_Service_Inst]
+DisplayName    = %NoTruth.SVCDESC%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\DdiMon.sys
+ServiceBinary  = %12%\NoTruth.sys
 
 ;
-;--- DdiMon_Device Coinstaller installation ------
+;--- NoTruth_Device Coinstaller installation ------
 ;
 
 [DestinationDirs]
-DdiMon_Device_CoInstaller_CopyFiles = 11
+NoTruth_Device_CoInstaller_CopyFiles = 11
 
-[DdiMon_Device.NT.CoInstallers]
-AddReg=DdiMon_Device_CoInstaller_AddReg
-CopyFiles=DdiMon_Device_CoInstaller_CopyFiles
+[NoTruth_Device.NT.CoInstallers]
+AddReg=NoTruth_Device_CoInstaller_AddReg
+CopyFiles=NoTruth_Device_CoInstaller_CopyFiles
 
-[DdiMon_Device_CoInstaller_AddReg]
+[NoTruth_Device_CoInstaller_AddReg]
 HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
 
-[DdiMon_Device_CoInstaller_CopyFiles]
+[NoTruth_Device_CoInstaller_CopyFiles]
 WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
 
 [SourceDisksFiles]
 WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
 
-[DdiMon_Device.NT.Wdf]
-KmdfService =  DdiMon, DdiMon_wdfsect
-[DdiMon_wdfsect]
+[NoTruth_Device.NT.Wdf]
+KmdfService =  NoTruth, NoTruth_wdfsect
+[NoTruth_wdfsect]
 KmdfLibraryVersion = $KMDFVERSION$
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
 ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name
 ClassName="Samples" ; TODO: edit ClassName
-DiskName = "DdiMon Installation Disk"
-DdiMon.DeviceDesc = "DdiMon Device"
-DdiMon.SVCDESC = "DdiMon Service"
+DiskName = "NoTruth Installation Disk"
+NoTruth.DeviceDesc = "NoTruth Device"
+NoTruth.SVCDESC = "NoTruth Service"

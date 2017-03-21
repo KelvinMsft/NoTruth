@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 /// @file
-/// @brief Declares interfaces to DdiMon functions.
+/// @brief Declares interfaces to NoTruth functions.
 
-#ifndef DDIMON_DDI_MON_H_
-#define DDIMON_DDI_MON_H_
+#ifndef NoTruth_DDI_MON_H_
+#define NoTruth_DDI_MON_H_
 
 #include <fltKernel.h>
 
@@ -43,9 +43,9 @@ extern SharedShadowHookData* sharedata;
 //
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS
-    DdimonInitialization(_In_ SharedShadowHookData* shared_sh_data);
+    NoTruthInitialization(_In_ SharedShadowHookData* shared_sh_data);
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void DdimonTermination();
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void NoTruthTermination();
 
 typedef struct HideInputInfo{
 	PVOID	  hiddenAddr;
@@ -62,4 +62,4 @@ VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 address);
 // implementations
 //
 
-#endif  // DDIMON_DDI_MON_H_
+#endif  // NoTruth_DDI_MON_H_

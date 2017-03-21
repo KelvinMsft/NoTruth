@@ -16,7 +16,7 @@
 #define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 #endif  // HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER
 #include "performance.h"
-#include "../../DdiMon/shadow_hook.h"
+#include "../../NoTruth/shadow_hook.h"
 
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
@@ -340,29 +340,16 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode))
 	  };
 	  //ȡExit qualification
-      const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
-	
+      const auto fault_address = UtilVmRead(VmcsField::kExitQualification); 
+	 VmEntryInterruptionInformationField inject = {};
+	 inject.fields.interruption_type = exception.fields.interruption_type;
+	 inject.fields.vector = exception.fields.vector;
+	 inject.fields.deliver_error_code = true;
+	 inject.fields.valid = true;
 
-	  //Handle Copy-On-Write 
-	  
-	  HandleCopyOnWrite(
-		  guest_context->stack->processor_data->sh_data,
-		  guest_context->stack->processor_data->shared_data->shared_sh_data,
-		  fault_address,
-		  guest_context->stack->processor_data->ept_data);
-	 
-		  VmEntryInterruptionInformationField inject = {};
-		  inject.fields.interruption_type = exception.fields.interruption_type;
-		  inject.fields.vector = exception.fields.vector;
-		  inject.fields.deliver_error_code = true;
-		  inject.fields.valid = true;
-
-		  AsmWriteCR2(fault_address);
-		  UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, fault_code.all);
-		  UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-	 
-
-	
+	 AsmWriteCR2(fault_address);
+	 UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, fault_code.all);
+	 UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all); 
 	}//#PF
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kGeneralProtectionException) {
       // # GP
@@ -448,8 +435,7 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(GuestContext *guest_context) 
     guest_context->gp_regs->ax = cpu_info[0];
     guest_context->gp_regs->bx = cpu_info[1]; 
 	guest_context->gp_regs->cx = cpu_info[2];// &0XFFFFFFDF;
-    guest_context->gp_regs->dx = cpu_info[3];
-	HYPERPLATFORM_LOG_DEBUG("Someone CPUID... \r\n");
+    guest_context->gp_regs->dx = cpu_info[3]; 
   }
 	
   VmmpAdjustGuestInstructionPointer(guest_context->ip);
@@ -853,8 +839,7 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(GuestContext *guest_contex
         // Reg <- CR3
         case 3: {
           HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
-          *register_used = UtilVmRead(VmcsField::kGuestCr3);
-		  ULONG64 guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
+          *register_used = UtilVmRead(VmcsField::kGuestCr3); 
 	
 		  break;
         }

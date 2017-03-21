@@ -52,8 +52,7 @@ struct HideInformation {
 	bool isRing3;							
 
 	ULONG64 CR3;
-	PVOID64 MDL; 
-	bool isHidden;
+	PVOID64 MDL;  
 	bool isExit;
 	bool isDelete;
 };

@@ -77,8 +77,7 @@ struct ShadowHookData {
   const HideInformation* UserModeBackup;   // remember which var hit the last
   ULONG64 PageFault_Phy;
   ULONG64 PageFault_Virt;
-  bool IsKernelMemory;
-  bool CopyOnWrite;
+  bool IsKernelMemory; 
   KSPIN_LOCK spin_lock;
 };
 
@@ -130,9 +129,8 @@ _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C static TrampolineCode
 static HookInformation* ShpFindPatchInfoByPage(
     _In_ const SharedShadowHookData* shared_sh_data, _In_ void* address);
 
-
 static HideInformation* ShpFindHideInfoByProc(
-	const SharedShadowHookData* shared_sh_data, void* Proc);
+	const SharedShadowHookData* shared_sh_data, ULONG64 fault_pa);
 
 static HideInformation* ShpFindHideInfoByPage(
 	const SharedShadowHookData* shared_sh_data, void* address);
@@ -261,7 +259,7 @@ _Use_decl_annotations_ EXTERN_C ShadowHookData* ShAllocateShadowHookData() {
   return p;
 }
 
-// Terminates DdiMon
+// Terminates NoTruth
 _Use_decl_annotations_ EXTERN_C void ShFreeShadowHookData(
     ShadowHookData* sh_data) {
   PAGED_CODE();
@@ -269,7 +267,7 @@ _Use_decl_annotations_ EXTERN_C void ShFreeShadowHookData(
   delete sh_data;
 }
 
-// Initializes DdiMon
+// Initializes NoTruth
 _Use_decl_annotations_ EXTERN_C SharedShadowHookData* ShAllocateSharedShaowHookData() {
   PAGED_CODE();
 
@@ -340,29 +338,32 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS kDisableHideByProcess(PEPROCESS proc) {
 		},
 		nullptr);
 }
-
-_Use_decl_annotations_ NTSTATUS kEnableVarHiding(ShadowHookData *data,	EptData* ept_data, const SharedShadowHookData* shared_sh_data) {
+//--------------------------------------------------------------------------//
+_Use_decl_annotations_ NTSTATUS kEnableVarHiding(
+	ShadowHookData *data,	
+	EptData* ept_data, 
+	const SharedShadowHookData* shared_sh_data
+)
+{
 	KeInitializeSpinLock(&data->spin_lock);
-	data->CopyOnWrite = FALSE;
 	for (auto& info : shared_sh_data->UserModeList)
-	{
-		//是否已經被隱藏
-		if (!info->isHidden) 
-		{
-			HYPERPLATFORM_LOG_DEBUG("[START]VMM enable var hide CR3: %lu \r\n", info->CR3);
-			kEnableEntryForExecuteOnly(*info, ept_data);
-			info->isHidden = TRUE;
-		}
+	{ 
+		HYPERPLATFORM_LOG_DEBUG("[START]VMM enable var hide CR3: %lu \r\n", info->CR3);
+		kEnableEntryForExecuteOnly(*info, ept_data); 
 	}
 	return STATUS_SUCCESS;
 }
 
 // Enables page shadowing for all KernelModeList
 _Use_decl_annotations_ NTSTATUS ShEnablePageShadowing(
-    EptData* ept_data, const SharedShadowHookData* shared_sh_data) {
+    EptData* ept_data, 
+	const SharedShadowHookData* shared_sh_data
+) 
+{
  // HYPERPLATFORM_COMMON_DBG_BREAK();
 
-  for (auto& info : shared_sh_data->KernelModeList) {
+  for (auto& info : shared_sh_data->KernelModeList) 
+  {
     ShpEnablePageShadowingForExec(*info, ept_data);
   }
 
@@ -370,7 +371,10 @@ _Use_decl_annotations_ NTSTATUS ShEnablePageShadowing(
 }	
 
 // Disables page shadowing for all KernelModeList
-_Use_decl_annotations_ void ShVmCallDisablePageShadowing(EptData* ept_data, const SharedShadowHookData* shared_sh_data) 
+_Use_decl_annotations_ void ShVmCallDisablePageShadowing(
+	EptData* ept_data, 
+	const SharedShadowHookData* shared_sh_data
+) 
 {
   for (auto& info : shared_sh_data->KernelModeList) 
   {
@@ -395,14 +399,14 @@ _Use_decl_annotations_ void kVmCallDisableVarHidingIndependently(_In_ EptData* e
 		if (info->isExit == TRUE && info->isDelete == FALSE)
 		{
 			kDisableVarHiding(*info, ept_data);
-			count++;
+			count++; 
 			info->isDelete = TRUE;
 			break;
 		}
 	}
 }
 
-// Handles #BP. Checks if the #BP happened on where DdiMon set a break point,
+// Handles #BP. Checks if the #BP happened on where NoTruth set a break point,
 // and if so, modifies the contents of guest's IP to execute a corresponding
 // hook handler.
 
@@ -452,25 +456,12 @@ void MonitorPageChange(ShadowHookData* sh_data, const SharedShadowHookData* shar
 					//HYPERPLATFORM_LOG_DEBUG("CR3: %I64X mapping changed from %I64X to %I64X ", CR3, faultaddr, newpa);
 					if (newpa) 
 					{	
-						//1. set new EPT-pte to read-only
-						/*
-						auto entry = EptGetEptPtEntry(ept_data, newpa);
-						entry->fields.execute_access = TRUE;
-						entry->fields.write_access = FALSE;
-						entry->fields.read_access = FALSE;
-						entry->fields.physial_address = UtilPfnFromPa(newpa);
-						*/
+					
 						ModifyEPTEntryRWX(ept_data, newpa, newpa, FALSE, FALSE, TRUE);
 						info->NewPhysicalAddress = newpa;
 					}
-						//2. reset old EPT-Pte to normal
-						/*
-						auto entry2 = EptGetEptPtEntry(ept_data, faultaddr);
-						entry2->fields.execute_access = true;
-						entry2->fields.write_access = true;
-						entry2->fields.read_access = true;
-						entry2->fields.physial_address = UtilPfnFromPa(faultaddr);
-						*/
+						ModifyEPTEntryRWX(ept_data, sh_data->PageFault_Phy, sh_data->PageFault_Phy, TRUE, TRUE, TRUE);
+						UtilInveptAll();
 						sh_data->PageFault_Phy = 0;
 						sh_data->PageFault_Virt = 0;
 					}
@@ -486,14 +477,8 @@ _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
     EptData* ept_data) 
 {	
 	NT_VERIFY(ShpIsShadowHookActive(shared_sh_data));
-
-	if (sh_data->CopyOnWrite)
-	{
-		ULONG64 guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
-		MonitorPageChange(sh_data, shared_sh_data, ept_data, guest_cr3);
- 		sh_data->CopyOnWrite = FALSE;
-	}
-	else if(!sh_data->IsKernelMemory)
+ 
+	if(!sh_data->IsKernelMemory)
 	{
 		const auto info = kRestoreLastHideInfo(sh_data);//get back last written EPT-Pte
 		kEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	 
@@ -532,46 +517,7 @@ _Use_decl_annotations_ void ShHandleEptViolation(
   ShpSetMonitorTrapFlag(sh_data, true);			//設置MTF位,執行單步
   ShpSaveLastHookInfo(sh_data, *info);			//保存最新設置
 }
-//come here only copy-on-write
-_Use_decl_annotations_ bool HandleCopyOnWrite(
-	_In_ ShadowHookData* sh_data,
-	_In_ const SharedShadowHookData* shared_sh_data, 
-	_In_ ULONG_PTR fault_address,
-	_In_ EptData* ept_data) 
-{
-	BOOLEAN ret = FALSE;
-	ULONG64 guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
 
-	const PageFaultErrorCode fault_code = {
-		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode))
-	};
-
-	for (auto& info : shared_sh_data->UserModeList)
-	{
-		// fault va == our hidden va and CR3 is same (current process)
-		if ((ULONG64)info->patch_address == fault_address &&  guest_cr3 == info->CR3)
-		{ 
-			//used for MTF handler for CopyOnWrite part 
-			ULONG64 oldPa;
-			GetPhysicalAddressByNewCR3(info->patch_address, info->CR3, &oldPa);
-
-			sh_data->PageFault_Phy = oldPa;							//old pa
-			sh_data->PageFault_Virt = (ULONG64)info->patch_address;	//va
-			
-			//after return Guest Os, Run a single instruction, and trap back into VMM
-			sh_data->CopyOnWrite = TRUE;
-
-
-			ModifyEPTEntryRWX(ept_data, oldPa, oldPa, TRUE, TRUE, TRUE);
-
-			HYPERPLATFORM_LOG_DEBUG("[#PF Handler]sh_data->proc : 0x%I64X oldVA : %I64X oldPa: %I64X Reason: %X \r\n", PsGetCurrentProcess(),fault_address , oldPa, fault_code.all);
-			ShpSetMonitorTrapFlag(sh_data, true);
-
-			ret = TRUE;
-		}
-	}
-	return ret;
-}
 
 // Handles EPT violation VM-exit.
 // For hidden-variable / data  queue
@@ -579,7 +525,7 @@ BOOLEAN isLog;
 //
 _Use_decl_annotations_ bool kHandleEptViolation(
 	ShadowHookData* sh_data, const SharedShadowHookData* shared_sh_data,
-	EptData* ept_data, void* fault_va, bool IsExecute, bool IsWrite , bool IsRead) 
+	EptData* ept_data, void* fault_va, void* fault_pa ,bool IsExecute, bool IsWrite , bool IsRead) 
 { 
 
 	if (!ShpIsShadowHookActive(shared_sh_data)) 
@@ -588,9 +534,10 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 	}
 	//find a page in var_hide list
 	//const auto info = ShpFindHideInfoByPage(shared_sh_data, fault_va);
-	const auto info = ShpFindHideInfoByProc(shared_sh_data, PsGetCurrentProcess());
+	const auto info = ShpFindHideInfoByProc(shared_sh_data,  (ULONG64)fault_pa);
 
 	if (!info) {
+		HYPERPLATFORM_LOG_DEBUG("Cannot find info %d \r\n" ,PsGetCurrentProcessId());
 		return false;
 	}
 
@@ -889,15 +836,15 @@ _Use_decl_annotations_ static HookInformation* ShpFindPatchInfoByPage(
   }
   return found->get();
 }
-_Use_decl_annotations_ static HideInformation* ShpFindHideInfoByProc(const SharedShadowHookData* shared_sh_data, void* Proc)
+_Use_decl_annotations_ static HideInformation* ShpFindHideInfoByProc(const SharedShadowHookData* shared_sh_data, ULONG64 fault_pa)
 {
-	const auto found = std::find_if(shared_sh_data->UserModeList.cbegin(), shared_sh_data->UserModeList.cend(), [Proc](const auto& info) {
-		return info->proc == Proc;
+	const auto found = std::find_if(shared_sh_data->UserModeList.cbegin(), shared_sh_data->UserModeList.cend(), [fault_pa](const auto& info) {	
+		return PAGE_ALIGN(info->NewPhysicalAddress) == PAGE_ALIGN(fault_pa);
 	});
-	if (found == shared_sh_data->UserModeList.cend()) {
+	if (found == shared_sh_data->UserModeList.cend()) 
+	{
 		return nullptr;
 	}
-
 	return found->get();
 }
 _Use_decl_annotations_ static HideInformation* ShpFindHideInfoByPage(const SharedShadowHookData* shared_sh_data, void* address)
@@ -1077,7 +1024,7 @@ _Use_decl_annotations_ static void kSaveLastHideInfo(ShadowHookData* sh_data, co
 {
 	KLOCK_QUEUE_HANDLE lock_handle = {};
 	KeAcquireInStackQueuedSpinLockAtDpcLevel(&sh_data->spin_lock, &lock_handle);
-	NT_ASSERT(!sh_data->UserModeBackup); 
+	NT_ASSERT(!sh_data->UserModeBackup);	
  	sh_data->UserModeBackup = &info;
 	sh_data->IsKernelMemory = FALSE;
 	KeReleaseInStackQueuedSpinLock(&lock_handle);
@@ -1110,7 +1057,7 @@ _Use_decl_annotations_ static void ShpSaveLastHookInfo(ShadowHookData* sh_data, 
 	sh_data->KernelModeBackup = &info;
 	sh_data->IsKernelMemory = TRUE;
 }
-// Checks if DdiMon is already initialized
+// Checks if NoTruth is already initialized
 _Use_decl_annotations_ static bool ShpIsShadowHookActive(const SharedShadowHookData* shared_sh_data) 
 {
   return !!(shared_sh_data);

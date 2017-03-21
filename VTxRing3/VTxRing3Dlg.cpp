@@ -207,7 +207,7 @@ cDrvCtrl drv;
 void CVTxRing3Dlg::OnBnClickedOk()
 {
 	CString err;
-	if (drv.Install("C:\\DdiMon.sys", "ddimontest2", "ddimontest2")) {
+	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest2", "NoTruthtest2")) {
 		if (drv.Start())
 		{
 			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
@@ -261,7 +261,7 @@ void CVTxRing3Dlg::OnBnClickedOk()
 					transferData2 = { 0 };
 				}  
 				
-				if (drv.Open("\\\\.\\DdiMon"))	
+				if (drv.Open("\\\\.\\NoTruth"))	
 				{
 
 					if(transferData2.Address && transferData2.ProcID)
@@ -364,7 +364,7 @@ void CVTxRing3Dlg::OnBnClickedOk()
 				err.Format(L"ProcID: %x Address2: %X", transferData2.ProcID, transferData2.Address);
 				OutputDebugString(err);
 
-				if (drv.Open("\\\\.\\DdiMon"))
+				if (drv.Open("\\\\.\\NoTruth"))
 				{
 
 					if (transferData2.Address && transferData2.ProcID)
@@ -432,7 +432,7 @@ void CVTxRing3Dlg::OnBnClickedButton1()
 		transferData.Address = (ULONG64)NtCreateThread;
 		err.Format(L"ProcID: %x Address: %X", transferData.ProcID, transferData.Address);
 		OutputDebugString(err);
-		if (drv.Open("\\\\.\\DdiMon")) 
+		if (drv.Open("\\\\.\\NoTruth")) 
 		{
 			if (!drv.IoControl(IOCTL_HIDE, &transferData, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes)) 
 			{

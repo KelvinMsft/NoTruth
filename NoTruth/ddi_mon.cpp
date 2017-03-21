@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 /// @file
-/// Implements DdiMon functions.
+/// Implements NoTruth functions.
 
 #include "ddi_mon.h"
 #include <ntimage.h>
@@ -86,47 +86,47 @@ typedef struct _SECTION_IMAGE_INFORMATION {
 //
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C
-    static void DdimonpFreeAllocatedTrampolineRegions();
+    static void NoTruthpFreeAllocatedTrampolineRegions();
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C static NTSTATUS
-    DdimonpEnumExportedSymbols(_In_ ULONG_PTR base_address,
+    NoTruthpEnumExportedSymbols(_In_ ULONG_PTR base_address,
                                _In_ EnumExportedSymbolsCallbackType callback,
                                _In_opt_ void* context);
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C
-    static bool DdimonpEnumExportedSymbolsCallback(
+    static bool NoTruthpEnumExportedSymbolsCallback(
         _In_ ULONG index, _In_ ULONG_PTR base_address,
         _In_ PIMAGE_EXPORT_DIRECTORY directory, _In_ ULONG_PTR directory_base,
         _In_ ULONG_PTR directory_end, _In_opt_ void* context);
 
-static std::array<char, 5> DdimonpTagToString(_In_ ULONG tag_value);
+static std::array<char, 5> NoTruthpTagToString(_In_ ULONG tag_value);
 
 template <typename T>
-static T DdimonpFindOrignal(_In_ T handler);
+static T NoTruthpFindOrignal(_In_ T handler);
 
-static VOID DdimonpHandleExQueueWorkItem(_Inout_ PWORK_QUEUE_ITEM work_item,
+static VOID NoTruthpHandleExQueueWorkItem(_Inout_ PWORK_QUEUE_ITEM work_item,
                                          _In_ WORK_QUEUE_TYPE queue_type);
 
-static PVOID DdimonpHandleExAllocatePoolWithTag(_In_ POOL_TYPE pool_type,
+static PVOID NoTruthpHandleExAllocatePoolWithTag(_In_ POOL_TYPE pool_type,
                                                 _In_ SIZE_T number_of_bytes,
                                                 _In_ ULONG tag);
 
-static VOID DdimonpHandleExFreePool(_Pre_notnull_ PVOID p);
+static VOID NoTruthpHandleExFreePool(_Pre_notnull_ PVOID p);
 
-static VOID DdimonpHandleExFreePoolWithTag(_Pre_notnull_ PVOID p,
+static VOID NoTruthpHandleExFreePoolWithTag(_Pre_notnull_ PVOID p,
                                            _In_ ULONG tag);
 
-static NTSTATUS DdimonpHandleNtQuerySystemInformation(
+static NTSTATUS NoTruthpHandleNtQuerySystemInformation(
     _In_ SystemInformationClass SystemInformationClass,
     _Inout_ PVOID SystemInformation, _In_ ULONG SystemInformationLength,
     _Out_opt_ PULONG ReturnLength);
 
 #if defined(ALLOC_PRAGMA)
-#pragma alloc_text(INIT, DdimonInitialization)
-#pragma alloc_text(INIT, DdimonpEnumExportedSymbols)
-#pragma alloc_text(INIT, DdimonpEnumExportedSymbolsCallback)
-#pragma alloc_text(PAGE, DdimonTermination)
-#pragma alloc_text(PAGE, DdimonpFreeAllocatedTrampolineRegions)
+#pragma alloc_text(INIT, NoTruthInitialization)
+#pragma alloc_text(INIT, NoTruthpEnumExportedSymbols)
+#pragma alloc_text(INIT, NoTruthpEnumExportedSymbolsCallback)
+#pragma alloc_text(PAGE, NoTruthTermination)
+#pragma alloc_text(PAGE, NoTruthpFreeAllocatedTrampolineRegions)
 #endif
 
 typedef struct _SECURITY_ATTRIBUTES {
@@ -145,7 +145,7 @@ SharedShadowHookData *g_share_Sh_Data;
 bool isHidden = false;
 // Defines where to install shadow KernelModeList and their handlers
 //
-// Because of simplified imlementation of DdiMon, DdiMon is unable to handle any
+// Because of simplified imlementation of NoTruth, NoTruth is unable to handle any
 // of following exports properly:
 //  - already unmapped exports (eg, ones on the INIT section) because it no
 //    longer exists on memory
@@ -159,29 +159,29 @@ bool isHidden = false;
 //    trusted. Even a kernel-address space pointer should not be trusted for
 //    production level security. Vefity and capture all contents from user
 //    surpplied address to VMM, then use them.
-static ShadowHookTarget g_ddimonp_hook_targets[] = {
+static ShadowHookTarget g_NoTruthp_hook_targets[] = {
     /*{
         RTL_CONSTANT_STRING(L"EXQUEUEWORKITEM"),
-		DdimonpHandleExQueueWorkItem,
+		NoTruthpHandleExQueueWorkItem,
         nullptr,
     },
     {
         RTL_CONSTANT_STRING(L"EXALLOCATEPOOLWITHTAG"),
-        DdimonpHandleExAllocatePoolWithTag, nullptr,
+        NoTruthpHandleExAllocatePoolWithTag, nullptr,
     },
     {
         RTL_CONSTANT_STRING(L"EXFREEPOOL"), 
-		DdimonpHandleExFreePool, 
+		NoTruthpHandleExFreePool, 
 		nullptr,
     },
     {
         RTL_CONSTANT_STRING(L"EXFREEPOOLWITHTAG"),	
-        DdimonpHandleExFreePoolWithTag, 
+        NoTruthpHandleExFreePoolWithTag, 
 		nullptr,
     },*/
     {
         RTL_CONSTANT_STRING(L"NTQUERYSYSTEMINFORMATION"),
-        DdimonpHandleNtQuerySystemInformation, nullptr,
+        NoTruthpHandleNtQuerySystemInformation, nullptr,
     },
 };
 PMDLX pagingLockProcessMemory(PVOID startAddr,
@@ -233,7 +233,7 @@ extern "C" {
 	 PVOID PsGetProcessSectionBaseAddress(PEPROCESS);
 	 PCHAR PsGetProcessImageFileName(PEPROCESS);
 }
-
+//--------------------------------------------------------------------------------------//
 VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 Address) {
 	
 	KAPC_STATE K; 
@@ -259,7 +259,7 @@ VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 Address) {
 	KeUnstackDetachProcess(&K);
 }
 
-
+//--------------------------------------------------------------------------------------//
 VOID ProcessMonitor(
 	IN HANDLE  ParentId,
 	IN HANDLE  ProcessId,
@@ -303,7 +303,7 @@ VOID ProcessMonitor(
 			status = ShEnableHide();
 
 			HYPERPLATFORM_LOG_INFO("Variable hidden 0x%I64X \r\n", (PVOID)notepad_proc);
-			HYPERPLATFORM_LOG_INFO("DdiMon has been initialized.");
+			HYPERPLATFORM_LOG_INFO("NoTruth has been initialized.");
 		}
 
 	}
@@ -372,8 +372,8 @@ VOID ProcessMonitor(
 // implementations
 //
 
-// Initializes DdiMon
-_Use_decl_annotations_ EXTERN_C NTSTATUS DdimonInitialization(SharedShadowHookData* shared_sh_data) {
+// Initializes NoTruth
+_Use_decl_annotations_ EXTERN_C NTSTATUS NoTruthInitialization(SharedShadowHookData* shared_sh_data) {
   //HYPERPLATFORM_COMMON_DBG_BREAK();
 
   // Get a base address of ntoskrnl
@@ -385,8 +385,8 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS DdimonInitialization(SharedShadowHookDa
   // Install KernelModeList by enumerating exports of ntoskrnl, but not activate them yet
   
   /*
-  auto status = DdimonpEnumExportedSymbols(reinterpret_cast<ULONG_PTR>(nt_base),
-                                           DdimonpEnumExportedSymbolsCallback,
+  auto status = NoTruthpEnumExportedSymbols(reinterpret_cast<ULONG_PTR>(nt_base),
+                                           NoTruthpEnumExportedSymbolsCallback,
                                            shared_sh_data);
   if (!NT_SUCCESS(status)) {
     return status;
@@ -394,7 +394,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS DdimonInitialization(SharedShadowHookDa
   status = ShEnableHooks();
   
   if (!NT_SUCCESS(status)) {
-    DdimonpFreeAllocatedTrampolineRegions();
+    NoTruthpFreeAllocatedTrampolineRegions();
     return status;
   }
   */
@@ -405,8 +405,8 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS DdimonInitialization(SharedShadowHookDa
   return status;
 }
 
-// Terminates DdiMon
-_Use_decl_annotations_ EXTERN_C void DdimonTermination() {
+// Terminates NoTruth
+_Use_decl_annotations_ EXTERN_C void NoTruthTermination() {
   PAGED_CODE();
 
   //ShDisableHooks();
@@ -414,16 +414,16 @@ _Use_decl_annotations_ EXTERN_C void DdimonTermination() {
   PsSetCreateProcessNotifyRoutine(ProcessMonitor, TRUE);
 
   UtilSleep(500);
-  HYPERPLATFORM_LOG_INFO("DdiMon has been terminated.");
+  HYPERPLATFORM_LOG_INFO("NoTruth has been terminated.");
 }
 
-// Frees trampoline code allocated and stored in g_ddimonp_hook_targets by
-// DdimonpEnumExportedSymbolsCallback()
+// Frees trampoline code allocated and stored in g_NoTruthp_hook_targets by
+// NoTruthpEnumExportedSymbolsCallback()
 _Use_decl_annotations_ EXTERN_C static void
-DdimonpFreeAllocatedTrampolineRegions() {
+NoTruthpFreeAllocatedTrampolineRegions() {
   PAGED_CODE();
 
-  for (auto& target : g_ddimonp_hook_targets) {
+  for (auto& target : g_NoTruthp_hook_targets) {
     if (target.original_call) {
       ExFreePoolWithTag(target.original_call, kHyperPlatformCommonPoolTag);
       target.original_call = nullptr;
@@ -433,7 +433,7 @@ DdimonpFreeAllocatedTrampolineRegions() {
 
 // Enumerates all exports in a module specified by base_address.
 
-_Use_decl_annotations_ EXTERN_C static NTSTATUS DdimonpEnumExportedSymbols(
+_Use_decl_annotations_ EXTERN_C static NTSTATUS NoTruthpEnumExportedSymbols(
     ULONG_PTR base_address, EnumExportedSymbolsCallbackType callback,
     void* context) {
   PAGED_CODE();
@@ -459,7 +459,7 @@ _Use_decl_annotations_ EXTERN_C static NTSTATUS DdimonpEnumExportedSymbols(
 }
 
 // Checks if the export is listed as a hook target, and if so install a hook.
-_Use_decl_annotations_ EXTERN_C static bool DdimonpEnumExportedSymbolsCallback(
+_Use_decl_annotations_ EXTERN_C static bool NoTruthpEnumExportedSymbolsCallback(
     ULONG index, ULONG_PTR base_address, PIMAGE_EXPORT_DIRECTORY directory,
     ULONG_PTR directory_base, ULONG_PTR directory_end, void* context) {
   PAGED_CODE(); 
@@ -495,7 +495,7 @@ _Use_decl_annotations_ EXTERN_C static bool DdimonpEnumExportedSymbolsCallback(
   
   RtlInitUnicodeString(&name_u, name);
   //±éšvÈ«¾Ö”µ½M
-  for (auto& target : g_ddimonp_hook_targets) {
+  for (auto& target : g_NoTruthp_hook_targets) {
     // Is this export listed as a target
     if (!FsRtlIsNameInExpression(&target.target_name, &name_u, TRUE, nullptr)) {
       continue;
@@ -514,7 +514,7 @@ _Use_decl_annotations_ EXTERN_C static bool DdimonpEnumExportedSymbolsCallback(
 					   NULL)) 
 	{	//modify 1
       // This is an error which should not happen
-      DdimonpFreeAllocatedTrampolineRegions();
+      NoTruthpFreeAllocatedTrampolineRegions();
       return false;
     }
 
@@ -526,7 +526,7 @@ _Use_decl_annotations_ EXTERN_C static bool DdimonpEnumExportedSymbolsCallback(
 }
 
 // Converts a pool tag in integer to a printable string
-_Use_decl_annotations_ static std::array<char, 5> DdimonpTagToString(
+_Use_decl_annotations_ static std::array<char, 5> NoTruthpTagToString(
     ULONG tag_value) {
   PoolTag tag = {tag_value};
   for (auto& c : tag.chars) {
@@ -548,8 +548,8 @@ _Use_decl_annotations_ static std::array<char, 5> DdimonpTagToString(
 
 // Finds a handler to call an original function
 template <typename T>
-static T DdimonpFindOrignal(T handler) {
-  for (const auto& target : g_ddimonp_hook_targets) {
+static T NoTruthpFindOrignal(T handler) {
+  for (const auto& target : g_NoTruthp_hook_targets) {
     if (target.handler == handler) {
       NT_ASSERT(target.original_call);
       return reinterpret_cast<T>(target.original_call);
@@ -561,8 +561,8 @@ static T DdimonpFindOrignal(T handler) {
 
 // The hook handler for ExFreePool(). Logs if ExFreePool() is called from where
 // not backed by any image
-_Use_decl_annotations_ static VOID DdimonpHandleExFreePool(PVOID p) {
-  const auto original = DdimonpFindOrignal(DdimonpHandleExFreePool);
+_Use_decl_annotations_ static VOID NoTruthpHandleExFreePool(PVOID p) {
+  const auto original = NoTruthpFindOrignal(NoTruthpHandleExFreePool);
   original(p);
 
   // Is inside image?
@@ -576,9 +576,9 @@ _Use_decl_annotations_ static VOID DdimonpHandleExFreePool(PVOID p) {
 
 // The hook handler for ExFreePoolWithTag(). Logs if ExFreePoolWithTag() is
 // called from where not backed by any image.
-_Use_decl_annotations_ static VOID DdimonpHandleExFreePoolWithTag(PVOID p,
+_Use_decl_annotations_ static VOID NoTruthpHandleExFreePoolWithTag(PVOID p,
                                                                   ULONG tag) {
-  const auto original = DdimonpFindOrignal(DdimonpHandleExFreePoolWithTag);
+  const auto original = NoTruthpFindOrignal(NoTruthpHandleExFreePoolWithTag);
   original(p, tag);
 
   // Is inside image?
@@ -588,14 +588,14 @@ _Use_decl_annotations_ static VOID DdimonpHandleExFreePoolWithTag(PVOID p,
   }
 
   HYPERPLATFORM_LOG_INFO_SAFE("%p: ExFreePoolWithTag(P= %p, Tag= %s)",
-                              return_addr, p, DdimonpTagToString(tag).data());
+                              return_addr, p, NoTruthpTagToString(tag).data());
 }
 
 // The hook handler for ExQueueWorkItem(). Logs if a WorkerRoutine points to
 // where not backed by any image.
-_Use_decl_annotations_ static VOID DdimonpHandleExQueueWorkItem(
+_Use_decl_annotations_ static VOID NoTruthpHandleExQueueWorkItem(
     PWORK_QUEUE_ITEM work_item, WORK_QUEUE_TYPE queue_type) {
-  const auto original = DdimonpFindOrignal(DdimonpHandleExQueueWorkItem);
+  const auto original = NoTruthpFindOrignal(NoTruthpHandleExQueueWorkItem);
 
   // Is inside image?
   if (UtilPcToFileHeader(work_item->WorkerRoutine)) {
@@ -615,9 +615,9 @@ _Use_decl_annotations_ static VOID DdimonpHandleExQueueWorkItem(
 
 // The hook handler for ExAllocatePoolWithTag(). Logs if ExAllocatePoolWithTag()
 // is called from where not backed by any image.
-_Use_decl_annotations_ static PVOID DdimonpHandleExAllocatePoolWithTag(
+_Use_decl_annotations_ static PVOID NoTruthpHandleExAllocatePoolWithTag(
     POOL_TYPE pool_type, SIZE_T number_of_bytes, ULONG tag) {
-  const auto original = DdimonpFindOrignal(DdimonpHandleExAllocatePoolWithTag);
+  const auto original = NoTruthpFindOrignal(NoTruthpHandleExAllocatePoolWithTag);
   const auto result = original(pool_type, number_of_bytes, tag);
 
   // Is inside image?
@@ -629,18 +629,18 @@ _Use_decl_annotations_ static PVOID DdimonpHandleExAllocatePoolWithTag(
   HYPERPLATFORM_LOG_INFO_SAFE(
       "%p: ExAllocatePoolWithTag(POOL_TYPE= %08x, NumberOfBytes= %08X, Tag= "
       "%s) => %p",
-      return_addr, pool_type, number_of_bytes, DdimonpTagToString(tag).data(),
+      return_addr, pool_type, number_of_bytes, NoTruthpTagToString(tag).data(),
       result);
   return result;
 }
 
 // The hook handler for NtQuerySystemInformation(). Removes an entry for cmd.exe
 // and hides it from being listed.
-_Use_decl_annotations_ static NTSTATUS DdimonpHandleNtQuerySystemInformation(
+_Use_decl_annotations_ static NTSTATUS NoTruthpHandleNtQuerySystemInformation(
     SystemInformationClass system_information_class, PVOID system_information,
     ULONG system_information_length, PULONG return_length) {
   const auto original =
-      DdimonpFindOrignal(DdimonpHandleNtQuerySystemInformation);
+      NoTruthpFindOrignal(NoTruthpHandleNtQuerySystemInformation);
   const auto result = original(system_information_class, system_information,
                                system_information_length, return_length);
   if (!NT_SUCCESS(result)) {

@@ -1,13 +1,13 @@
-DdiMon
+NoTruth
 =======
 
 Introduction
 -------------
-DdiMon is a hypervisor performing inline hooking that is invisible to a guest 
-(ie, any code other than DdiMon) by using extended page table (EPT). 
+NoTruth is a hypervisor performing inline hooking that is invisible to a guest 
+(ie, any code other than NoTruth) by using extended page table (EPT). 
 
-DdiMon is meant to be an educational tool for understanding how to use EPT from
-a programming perspective for research. To demonstrate it, DdiMon installs the
+NoTruth is meant to be an educational tool for understanding how to use EPT from
+a programming perspective for research. To demonstrate it, NoTruth installs the
 invisible inline KernelModeList on the following device driver interfaces (DDIs) to 
 monitor activities of the Windows built-in kernel patch protection, a.k.a. 
 PatchGuard, and hide certain processes without being detected by PatchGuard.
@@ -29,7 +29,7 @@ Here is a movie demonstrating that shadow KernelModeList allow you to monitor an
 control DDI calls without being notified by PatchGuard.
 - https://www.youtube.com/watch?v=UflyX3GeYkw
 
-DdiMon is implemented on the top of HyperPlatform. See a project page for
+NoTruth is implemented on the top of HyperPlatform. See a project page for
 more details of HyperPlatform:
 - https://github.com/tandasat/HyperPlatform
 
@@ -44,13 +44,13 @@ the following command, and then restart the system to activate the change:
 
 To install and uninstall the driver, use the 'sc' command. For installation:
 
-    >sc create DdiMon type= kernel binPath= C:\vttest\DdiMon-master\x64\Debug\DdiMon.sys
-    >sc start DdiMon
+    >sc create NoTruth type= kernel binPath= C:\vttest\NoTruth-master\x64\Debug\NoTruth.sys
+    >sc start NoTruth
 
 And for uninstallation:
 
-    >sc stop DdiMon
-    >sc delete DdiMon
+    >sc stop NoTruth
+    >sc delete NoTruth
     >bcdedit /deletevalue testsigning
 
 Note that the system must support the Intel VT-x and EPT technology to
@@ -64,7 +64,7 @@ project page.
 
 Output
 -------
-All logs are printed out to DbgView and saved in C:\Windows\DdiMon.log.
+All logs are printed out to DbgView and saved in C:\Windows\NoTruth.log.
 
 
 Motivation
@@ -81,8 +81,8 @@ more than 1:1 guest to machine physiocal memory mapping, MoRE lacks flexibility
 to extend its code for supporting broader platforms and implementing your own 
 analysis tools.
 
-DdiMon provides a similar sample use of EPT as what MoRE does with a greater
-range of platform support such as x64 and/or Windows 10. DdiMon, also, can be
+NoTruth provides a similar sample use of EPT as what MoRE does with a greater
+range of platform support such as x64 and/or Windows 10. NoTruth, also, can be
 seen as example extension of HyperPlatform for memory virtualization.
 
 - [1] SecVisor: A Tiny Hypervisor to Provide Lifetime Kernel Code Integrity for
@@ -103,11 +103,11 @@ seen as example extension of HyperPlatform for memory virtualization.
 
 Design
 -------
-In order to isntall a shadow hook, DdiMon creates a couple of copies of a page
-where the address to isntall a hook belongs to. After DdiMon is initialized,
+In order to isntall a shadow hook, NoTruth creates a couple of copies of a page
+where the address to isntall a hook belongs to. After NoTruth is initialized,
 those two pages are accessed when a guest, namely all but ones by the hypervisor
-(ie, DdiMon), attempts to access to the original page instead. For example, when
-DdiMon installs a hook onto 0x1234, two copied pages are created: 0xa000 for 
+(ie, NoTruth), attempts to access to the original page instead. For example, when
+NoTruth installs a hook onto 0x1234, two copied pages are created: 0xa000 for 
 execution access and 0xb000 for read or write access, and memory access is 
 performed as below after the hook is activated:
 
@@ -120,7 +120,7 @@ The following explains how it is accomplished.
 
 **Default state**
 
-DdiMon first configures an EPT entry corresponds to 0x1000-0x1fff to refer to 
+NoTruth first configures an EPT entry corresponds to 0x1000-0x1fff to refer to 
 the contents of 0xa000 and to disallow read and write access to the page.
 
 **Scenario: Read or Write**
@@ -144,8 +144,8 @@ instruction reading from or writing to 0xb234.
 
 At this time, execution is done against contents of 0xa000 without triggering 
 any events unless no other settings is made. In order to monitor execution of 
-0xa234 (0x1234 from guest's perspective), DdiMon sets a break point (0xcc) to 
-0xa234 and handles #BP in the hypervisor. Following steps are how DdiMon 
+0xa234 (0x1234 from guest's perspective), NoTruth sets a break point (0xcc) to 
+0xa234 and handles #BP in the hypervisor. Following steps are how NoTruth 
 KernelModeList execution of 0xa234.
 
 1. On #BP VM-exit, the hypervisor checks if guest's EIP/RIP is 0x1234 first. If
@@ -168,9 +168,9 @@ The following are a call hierarchy with regard to sequences explained above.
 
 **On DriverEntry**
 
-    DdimonInitialization()
+    NoTruthInitialization()
       // Enumerates exports of ntoskrnl
-      DdimonpEnumExportedSymbolsCallback()
+      NoTruthpEnumExportedSymbolsCallback()
         // Creates shadow breakpoint without activating it
         SbpCreatePreBreakpoint()
       SbpStart()
@@ -230,8 +230,8 @@ Logs for activities of NoImage are look like this:
 
 Caveats
 --------
-DdiMon is meant to be an educational tool and not robust, production quality
-software which is able to handle various edge cases. For example, DdiMon
+NoTruth is meant to be an educational tool and not robust, production quality
+software which is able to handle various edge cases. For example, NoTruth
 does not handle self-modification code since any memory writes on a shadowed
 page is not reflected to a view for execution. For this reason, researchers are
 encouraged to use this project as sample code to get familiar with EPT and

@@ -14,7 +14,7 @@
 #define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 #endif  // HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER
 #include "performance.h"
-#include "../../DdiMon/shadow_hook.h"
+#include "../../NoTruth/shadow_hook.h"
 
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
@@ -587,7 +587,7 @@ _Use_decl_annotations_ void EptHandleEptViolation(
 		readOrWrite = false;
     
 	if (read_failure || write_failure || execute_failure) {
-		if (!kHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va, execute_failure, write_failure, read_failure ))
+		if (!kHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va, (VOID*)fault_pa, execute_failure, write_failure, read_failure ))
 		{
 			ShHandleEptViolation(sh_data, shared_sh_data, ept_data, fault_va);
 		}

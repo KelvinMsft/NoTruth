@@ -32,7 +32,6 @@ std::unique_ptr<HideInformation> VariableHiding::CreateHidingInformation(
 	info->CR3 = CR3;
 	info->MDL = mdl;
 	info->proc = proc;
-	info->isHidden = FALSE;
 	info->isExit   = FALSE;
 	info->isDelete = FALSE; 
 	info->NewPhysicalAddress = physicalAddress;

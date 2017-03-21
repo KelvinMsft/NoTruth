@@ -17,7 +17,7 @@
 #define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 #endif  // HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER
 #include "performance.h"
-#include "../../DdiMon/ddi_mon.h"
+#include "../../NoTruth/ddi_mon.h"
 struct Page1 {
 	UCHAR* page;
 	Page1();
@@ -30,12 +30,12 @@ typedef struct _TRANSFER_IOCTL
 	ULONG64 Address;
 }TRANSFERIOCTL, *PTRANSFERIOCTL;
 
-#define DDI_WIN32_DEVICE_NAME_A		"\\\\.\\DdiMon"
-#define DDI_WIN32_DEVICE_NAME_W		L"\\\\.\\DdiMon"
-#define DDI_DEVICE_NAME_A			"\\Device\\DdiMon"
-#define DDI_DEVICE_NAME_W			L"\\Device\\DdiMon"
-#define DDI_DOS_DEVICE_NAME_A		"\\DosDevices\\DdiMon"
-#define DDI_DOS_DEVICE_NAME_W		L"\\DosDevices\\DdiMon"
+#define DDI_WIN32_DEVICE_NAME_A		"\\\\.\\NoTruth"
+#define DDI_WIN32_DEVICE_NAME_W		L"\\\\.\\NoTruth"
+#define DDI_DEVICE_NAME_A			"\\Device\\NoTruth"
+#define DDI_DEVICE_NAME_W			L"\\Device\\NoTruth"
+#define DDI_DOS_DEVICE_NAME_A		"\\DosDevices\\NoTruth"
+#define DDI_DOS_DEVICE_NAME_W		L"\\DosDevices\\NoTruth"
 typedef struct _DEVICE_EXTENSION
 {
 	ULONG  StateVariable;
@@ -86,7 +86,7 @@ _IRQL_requires_max_(PASSIVE_LEVEL) bool DriverpIsSuppoetedOS();
 //
 // implementations
 //
-PEPROCESS hiddenProc;
+//--------------------------------------------------------------------------------------//
 NTSTATUS DispatchHideEngineIOCTL(
 			IN PVOID InputBuffer,				//輸入
 			IN ULONG InputBufferLength,			//輸入buffer大小
@@ -97,7 +97,7 @@ NTSTATUS DispatchHideEngineIOCTL(
 {
 	NTSTATUS status = STATUS_SUCCESS;
 	PTRANSFERIOCTL data = (PTRANSFERIOCTL)InputBuffer;
-	PEPROCESS oldProc = PsGetCurrentProcess();
+	PEPROCESS hiddenProc; 
 	if (IoControlCode == IOCTL_HIDE) 
 	{
 		HYPERPLATFORM_LOG_DEBUG("[HIDE]Hide engine IOCTL Dispatching %x \r\n" , IoControlCode);
@@ -113,6 +113,7 @@ NTSTATUS DispatchHideEngineIOCTL(
 	HYPERPLATFORM_LOG_DEBUG("ret\r\n");
 	return status;
 }
+//--------------------------------------------------------------------------------------//
 NTSTATUS DDI_devCtrlRoutine(
 	IN PDEVICE_OBJECT		DeviceObject,
 	IN PIRP					Irp
@@ -188,79 +189,8 @@ NTSTATUS DDI_devCtrlRoutine(
 	return  status;
 }
 
-/*** 
-  // Virtualize all processors 虛擬化所有CPU
- 
-  // 透過DPC, 分發虛擬化回調
-  // 虛擬化過程大致流程如下:
-  
-  // 對於當前CPU (回?為:vmpstartVM)
-  // 1. 分配ProcessorData結構
-  // 2. ProcessorData->ept_data << 構建EPT?表
-  // 3. ProcessorData->sh_data  << 分配及初始化ShadowHookData ??勾子?細?料
-  // 4. 分配vmm用的棧
-  // 5. 從分配到的地址,加上大小 = 棧?域地址 (因為棧是向下發展)
-  // 6. 壓入ProcessorData指?
-  // 7. 再壓入MAXULONG_PTR
-  // 8. 以後就是可用的真正棧基址及空?
-  // 9. Processor_data->shared_data << shared_data 參數上下文
-  //10. 分配VMX-Region 及 VMCS, 它們的維?結構同一?->?而初始化填充vmcs各?域-> 如?置VMEXIT回?函數 -> 其中函數VmmVmExitHandler為核心, 分發exit原因
-  //11. 啟動-> vmcs?置後 -> ?用匯編VMLAUNCH指令, 啟動VM
-
-  完成?擬化後 激活HOOK流程
-  流程如下:
-  // 遍歷內核導出表, 找到函數地址後, ?用回?
-  // 遍歷準備了HOOK的全局數組, 數組結構為ShadowHookTarget[] (函數名,HOOK回?,原函數)
-  // ShInstallHook安?勾子, 參數為SharedShadowHookData(已HOOK了的數組,減小重覆分配相同?面)
-  // ShpCreateHookInformation 嘗?透?shared_sh_data?取或創建兩??面 執行/?寫 , 因為不同CPU核心可能一早已經分配影子?面
-  // ShpSetupInlineHook, 基本?置INLINE HOOK後, 參數為分配好的可執行?面, 對?一?寫下0xCC
-  // (即現在有兩? , 1?為原來?面(已被INLINE HOOK), 1?為影子執行?面(寫入0xCC))
-  // 最後把HOOKINFO元素插入全局數組
-
-	真實?面    : INLINE HOOK
-	影子執行?面: 寫入了0xCC
-	影子?寫?面: 正常無修改?面
-
-	?寫的情況:
-
-	1. 把映射EPT?和?擬內存?聯 
-
-	2. ?置EPT?屬性為不可?寫,並EPT??為無效 
-
-	3. 任何?程?問不可?寫內存的EPT?, 導致陷入VMM 
-
-	4. ?入EPT????問?理函數
-
-	5. 更換?面為可?寫,同時返回
-
-	6. 把EPT?對應的物理地址修改為"影子?寫?面"
-
-	7. ?置MTF位,產生單步 
-
-	8. 捕?單步異常 
-
-	9. ?置"影子執行?面", 再?置?EPT?為不可?寫及EPT?無效, ?下次有人?問時仍然重覆以第一步
-
-
-	執行的情況: 
-
-	1. 執行地址
-
-	2. ?發斷?異常
-
-	3. 捕?斷? 
-
-	4. 修改EIP到??函數, 跳到我們的函數
-
-	5. 返回原函數
-
-
-
-*
-*
-*
-*/
 // A driver entry point
+//--------------------------------------------------------------------------------------//
 _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
                                             PUNICODE_STRING registry_path) {
 	BOOLEAN symbolicLink;
@@ -273,7 +203,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   UNREFERENCED_PARAMETER(registry_path);
   PAGED_CODE();
   
-  static const wchar_t kLogFilePath[] = L"\\SystemRoot\\DdiMon.log";
+  static const wchar_t kLogFilePath[] = L"\\SystemRoot\\NoTruth.log";
   
   static const auto kLogLevel =
       (IsReleaseBuild()) ? kLogPutLevelInfo | kLogOptDisableFunctionName

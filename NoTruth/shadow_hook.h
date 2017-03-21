@@ -5,8 +5,8 @@
 /// @file
 /// @brief Declares interfaces to shadow hook functions.
 
-#ifndef DDIMON_SHADOW_HOOK_H_
-#define DDIMON_SHADOW_HOOK_H_
+#ifndef NoTruth_SHADOW_HOOK_H_
+#define NoTruth_SHADOW_HOOK_H_
 
 #include <fltKernel.h>
 
@@ -115,6 +115,7 @@ _IRQL_requires_min_(DISPATCH_LEVEL) bool kHandleEptViolation(
 	_In_ ShadowHookData* sh_data,
 	_In_ const SharedShadowHookData* shared_sh_data, _In_ EptData* ept_data,
 	_In_ void* fault_va,
+	_In_ void* fault_pa,
 	_In_ bool  isExecute,
 	_In_ bool  IsWrite,
 	_In_ bool  IsRead);
@@ -143,12 +144,7 @@ _IRQL_requires_min_(DISPATCH_LEVEL) void kVmCallDisableVarHidingIndependently(
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C PMDLX GetHideMDL(
 	_In_ SharedShadowHookData* shared_sh_data, 
 	_In_ PEPROCESS proc);
-
-_IRQL_requires_min_(DISPATCH_LEVEL) bool HandleCopyOnWrite(
-	_In_ ShadowHookData* sh_data,
-	_In_ const SharedShadowHookData* shared_sh_data,
-	_In_ ULONG_PTR fault_address,
-	_In_ EptData* ept_data);
+ 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables
@@ -158,4 +154,4 @@ _IRQL_requires_min_(DISPATCH_LEVEL) bool HandleCopyOnWrite(
 // implementations
 //
 
-#endif  // DDIMON_SHADOW_HOOK_H_
+#endif  // NoTruth_SHADOW_HOOK_H_
