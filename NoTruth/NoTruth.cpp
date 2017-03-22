@@ -151,13 +151,13 @@ NTSTATUS AddMemoryHide(PEPROCESS proc, ULONG64 Address) {
 //--------------------------------------------------------------------------------------//
 NTSTATUS StartMemoryHide()
 { 
-	return kStartHiddenEngine(); 
+	return TruthStartHiddenEngine();
 }
 
 //--------------------------------------------------------------------------------------//
 NTSTATUS StopMemoryHide()
 {
-	return kStopHiddenEngine();
+	return TruthStopHiddenEngine();
 }
 
 //--------------------------------------------------------------------------------------//
@@ -182,10 +182,10 @@ VOID ProcessMonitor(
 		else
 		{
 			HYPERPLATFORM_LOG_INFO("Process Exiting... \r\n");
-			PMDLX mdl = GetHideMDL(reinterpret_cast<ShareDataContainer*>(sharedata), proc);
+			PMDLX mdl = TruthGetHideMDL(reinterpret_cast<ShareDataContainer*>(sharedata), proc);
 		 
 			//hyper-call
-			kDisableHideByProcess(proc);
+			TruthDisableHideByProcess(proc);
 			 
 			if (mdl)
 			{
@@ -210,7 +210,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS NoTruthInitialization(ShareDataContaine
 _Use_decl_annotations_ EXTERN_C void NoTruthTermination() {
   PAGED_CODE();
 
-  kStopHiddenEngine();
+  TruthStopHiddenEngine();
   PsSetCreateProcessNotifyRoutine(ProcessMonitor, TRUE); 
   HYPERPLATFORM_LOG_INFO("NoTruth has been terminated.");
 }

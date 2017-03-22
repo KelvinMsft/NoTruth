@@ -318,7 +318,7 @@ _Use_decl_annotations_ static void VmmpHandleUnexpectedExit(
 _Use_decl_annotations_ static void VmmpHandleMonitorTrap(GuestContext *guest_context) {
   HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
   auto processor_data = guest_context->stack->processor_data;
-  ShHandleMonitorTrapFlag(processor_data->sh_data,
+  TruthHandleMonitorTrapFlag(processor_data->sh_data,
                           processor_data->shared_data->shared_sh_data,
                           processor_data->ept_data);
 
@@ -937,7 +937,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   else if (hypercall_number == HypercallNumber::kEnableAllHideMemory)
   {
 	  //set GVA->GPA -----> EPT PTE entry to read-only
-	  kEnableAllMemoryHide(
+	  TruthEnableAllMemoryHide(
 		  guest_context->stack->processor_data->sh_data,
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
@@ -951,7 +951,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   }
   else if (hypercall_number == HypercallNumber::kDisableAllHideMemory) 
   {
-	  kDisableAllMemoryHide(
+	  TruthDisableAllMemoryHide(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );
@@ -963,7 +963,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
 
   else if (hypercall_number == HypercallNumber::kDisableSingleHideMemory) {
 	 
-	  kDisableSingleMemoryHide(
+	  TruthDisableSingleMemoryHide(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data,
 		  (PEPROCESS)context
@@ -975,7 +975,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   }
   else if (hypercall_number == HypercallNumber::kRemoveSingleHideNode)
   { 
-	  kRemoveSingleHideNode(
+	  TruthRemoveSingleHideNode(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data,
 		  (PEPROCESS)context
@@ -987,7 +987,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   }
   else if (hypercall_number == HypercallNumber::kRemoveAllHideNode)
   {
-	  kRemoveAllHideNode(
+	  TruthRemoveAllHideNode(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );

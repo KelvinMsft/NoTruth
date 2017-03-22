@@ -61,17 +61,17 @@ struct HiddenData {
 // prototypes
 //
 
-static HideInformation* ShpFindHideInfoByPhyAddr(
+static HideInformation* TruthFindHideInfoByPhyAddr(
 	const ShareDataContainer* shared_sh_data, ULONG64 fault_pa);
  
 //Come from Reading, independent page
-static void kEnableEntryForExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
+static void TruthEnableEntryForExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
 
 //Come from Reading, independent page
-static void kEnableEntryForReadOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
+static void TruthEnableEntryForReadOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
 
 //Come from Write,  reset page for exec. and shared page with exec.
-static void kEnableEntryForAll(_In_ const HideInformation& info , _In_ EptData* ept_data);
+static void TruthEnableEntryForAll(_In_ const HideInformation& info , _In_ EptData* ept_data);
 
 //Come from execute, reset page for exec. and shared page with write.
 //static void K_EnableVarHidingForExec(_In_ const HideInformation& info, _In_ EptData* ept_data);
@@ -80,15 +80,15 @@ static void kEnableEntryForAll(_In_ const HideInformation& info , _In_ EptData* 
 // After write AND others read it which is unexpected case 
 // As a result, we always have to set it to read-only, 
 // so that we can confirm that CPU always used safe-page even after specific write / execute 
-static const HideInformation* kRestoreLastHideInfo(_In_ HiddenData* sh_data);
+static const HideInformation* TruthRestoreLastHideInfo(_In_ HiddenData* sh_data);
 
-static void kDisableVarHiding(_In_ const HideInformation& info,
+static void TruthDisableVarHiding(_In_ const HideInformation& info,
 								_In_ EptData* ept_data);
 
-static void ShpSetMonitorTrapFlag(_In_ HiddenData* sh_data,
+static void TruthSetMonitorTrapFlag(_In_ HiddenData* sh_data,
                                   _In_ bool enable);
 
-static void kSaveLastHideInfo(_In_ HiddenData* sh_data,
+static void TruthSaveLastHideInfo(_In_ HiddenData* sh_data,
 								_In_ const HideInformation& info); 
 
 static bool IsUserModeHideActive( _In_ const ShareDataContainer* shared_sh_data);
@@ -189,7 +189,7 @@ _Use_decl_annotations_ EXTERN_C void TruthFreeSharedHiddenData(
 
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ EXTERN_C NTSTATUS kStartHiddenEngine() 
+_Use_decl_annotations_ EXTERN_C NTSTATUS TruthStartHiddenEngine()
 {
 	PAGED_CODE();
 	//VM-CALL, after vm-call trap into VMM
@@ -202,7 +202,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS kStartHiddenEngine()
 }
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ EXTERN_C NTSTATUS kStopHiddenEngine() {
+_Use_decl_annotations_ EXTERN_C NTSTATUS TruthStopHiddenEngine() {
 	PAGED_CODE();
 
 	NTSTATUS status; 
@@ -221,7 +221,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS kStopHiddenEngine() {
 }
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ EXTERN_C NTSTATUS kDisableHideByProcess(PEPROCESS proc)
+_Use_decl_annotations_ EXTERN_C NTSTATUS TruthDisableHideByProcess(PEPROCESS proc)
 {
 	PAGED_CODE();
 
@@ -240,7 +240,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS kDisableHideByProcess(PEPROCESS proc)
 } 
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void kEnableAllMemoryHide(
+_Use_decl_annotations_ void TruthEnableAllMemoryHide(
 	HiddenData *data,	
 	EptData* ept_data, 
 	ShareDataContainer* shared_sh_data
@@ -249,24 +249,24 @@ _Use_decl_annotations_ void kEnableAllMemoryHide(
 	KeInitializeSpinLock(&shared_sh_data->SpinLock);
 	for (auto& info : shared_sh_data->UserModeList)
 	{  
-		kEnableEntryForExecuteOnly(*info, ept_data); 
+		TruthEnableEntryForExecuteOnly(*info, ept_data);
 	} 
 }
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ void kDisableAllMemoryHide(
+_Use_decl_annotations_ void TruthDisableAllMemoryHide(
 	_In_ EptData* ept_data, 
 	_In_ ShareDataContainer* shared_sh_data
 )
 {
 	for (auto& info : shared_sh_data->UserModeList) 
 	{
-		kDisableVarHiding(*info, ept_data);
+		TruthDisableVarHiding(*info, ept_data);
 	}
 }
  
 //------------------------------------------------------------------------//
-_Use_decl_annotations_ void kDisableSingleMemoryHide(
+_Use_decl_annotations_ void TruthDisableSingleMemoryHide(
 	_In_ EptData* ept_data, 
 	_In_ ShareDataContainer* shared_sh_data,
 	_In_ PEPROCESS proc
@@ -277,14 +277,14 @@ _Use_decl_annotations_ void kDisableSingleMemoryHide(
 		if (info->proc == proc)
 		{
 			//info
-			kDisableVarHiding(*info, ept_data);   
+			TruthDisableVarHiding(*info, ept_data);
  			break;
 		}
 	}
 }
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void kRemoveAllHideNode(
+_Use_decl_annotations_ void TruthRemoveAllHideNode(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data
 )
@@ -302,11 +302,12 @@ _Use_decl_annotations_ void kRemoveAllHideNode(
 				shared_sh_data->UserModeList.end()
 			); 
 	} 
+
 	HYPERPLATFORM_LOG_ERROR("All - ListSize: %d", shared_sh_data->UserModeList.size());
 }
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void kRemoveSingleHideNode(
+_Use_decl_annotations_ void TruthRemoveSingleHideNode(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data,
 	_In_ PEPROCESS proc
@@ -333,7 +334,7 @@ _Use_decl_annotations_ void kRemoveSingleHideNode(
 	HYPERPLATFORM_LOG_ERROR("Single - ListSize: %d", shared_sh_data->UserModeList.size());
 }
 //------------------------------------------------------------------------//
-_Use_decl_annotations_ bool ShHandleBreakpoint(
+_Use_decl_annotations_ bool TruthHandleBreakpoint(
 	HiddenData* sh_data,
 	const ShareDataContainer* shared_sh_data,
 	void* guest_ip) 
@@ -343,7 +344,7 @@ _Use_decl_annotations_ bool ShHandleBreakpoint(
 }
 //------------------------------------------------------------------------//
 // Handles MTF VM-exit. Re-enables the shadow hook and clears MTF.
-_Use_decl_annotations_ void ShHandleMonitorTrapFlag(
+_Use_decl_annotations_ void TruthHandleMonitorTrapFlag(
     HiddenData* sh_data, 
 	ShareDataContainer* shared_sh_data,
     EptData* ept_data) 
@@ -352,16 +353,16 @@ _Use_decl_annotations_ void ShHandleMonitorTrapFlag(
 
 	KeAcquireInStackQueuedSpinLockAtDpcLevel(&shared_sh_data->SpinLock, &shared_sh_data->LockHandle);
 	 
-	const auto info = kRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
-	kEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
-	ShpSetMonitorTrapFlag(sh_data, false);
+	const auto info = TruthRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
+	TruthEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
+	TruthSetMonitorTrapFlag(sh_data, false);
 
 	KeReleaseSpinLockFromDpcLevel(&shared_sh_data->SpinLock);
 
 } 
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ bool kHandleEptViolation(
+_Use_decl_annotations_ bool TruthHandleEptViolation(
 	HiddenData* sh_data,  
 	ShareDataContainer* shared_sh_data,
 	EptData* ept_data, 
@@ -383,7 +384,7 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 	}
 
 	//This have to handle carefully. Easily got hang from this. If we can't find 
-	const auto info = ShpFindHideInfoByPhyAddr(shared_sh_data,  (ULONG64)fault_pa);
+	const auto info = TruthFindHideInfoByPhyAddr(shared_sh_data,  (ULONG64)fault_pa);
 
 	if (!info) {
 		HYPERPLATFORM_LOG_DEBUG("Cannot find info %d  fault_pa: %I64X  \r\n" ,PsGetCurrentProcessId(), fault_pa);
@@ -393,22 +394,22 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 	//Read in single page
 	if (IsRead)
 	{
-		kEnableEntryForReadOnly(*info, ept_data);
+		TruthEnableEntryForReadOnly(*info, ept_data);
 		//Set MTF flags 
-		ShpSetMonitorTrapFlag(sh_data, true);
+		TruthSetMonitorTrapFlag(sh_data, true);
 		//used for reset read-only
-		kSaveLastHideInfo(sh_data, *info);
+		TruthSaveLastHideInfo(sh_data, *info);
 	}
 
 	//Write,Execute in same page
 	if (IsWrite)
 	{		
 		//Set R/W/!X for RING3/ RING0
-		kEnableEntryForAll(*info, ept_data);
+		TruthEnableEntryForAll(*info, ept_data);
 		//Set MTF flags 
-		ShpSetMonitorTrapFlag(sh_data, true);
+		TruthSetMonitorTrapFlag(sh_data, true);
 		//used for reset read-only
-		kSaveLastHideInfo(sh_data, *info);
+		TruthSaveLastHideInfo(sh_data, *info);
 
 	}
 	 
@@ -418,7 +419,7 @@ _Use_decl_annotations_ bool kHandleEptViolation(
 }
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ EXTERN_C PMDLX GetHideMDL(
+_Use_decl_annotations_ EXTERN_C PMDLX TruthGetHideMDL(
 	_In_ ShareDataContainer* shared_sh_data,  
 	_In_ PEPROCESS proc
 )
@@ -463,7 +464,7 @@ _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
 }
 
 //-------------------------------------------------------------------------------//
-_Use_decl_annotations_ static HideInformation* ShpFindHideInfoByPhyAddr(
+_Use_decl_annotations_ static HideInformation* TruthFindHideInfoByPhyAddr(
 	const ShareDataContainer* shared_sh_data, 
 	ULONG64 fault_pa
 )
@@ -479,7 +480,7 @@ _Use_decl_annotations_ static HideInformation* ShpFindHideInfoByPhyAddr(
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kEnableEntryForExecuteOnly(const HideInformation& info, EptData* ept_data) 
+_Use_decl_annotations_ static void TruthEnableEntryForExecuteOnly(const HideInformation& info, EptData* ept_data)
 {
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
@@ -487,7 +488,7 @@ _Use_decl_annotations_ static void kEnableEntryForExecuteOnly(const HideInformat
 	UtilInveptAll(); 
 }
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kEnableEntryForAll(const HideInformation& info, EptData* ept_data)
+_Use_decl_annotations_ static void TruthEnableEntryForAll(const HideInformation& info, EptData* ept_data)
 {
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
@@ -495,7 +496,7 @@ _Use_decl_annotations_ static void kEnableEntryForAll(const HideInformation& inf
 	UtilInveptAll();
 }
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kEnableEntryForReadOnly(const HideInformation& info, EptData* ept_data)
+_Use_decl_annotations_ static void TruthEnableEntryForReadOnly(const HideInformation& info, EptData* ept_data)
 {
 
 	ULONG64 newPA = 0;
@@ -504,7 +505,7 @@ _Use_decl_annotations_ static void kEnableEntryForReadOnly(const HideInformation
 	UtilInveptAll();
 }
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kDisableVarHiding(const HideInformation& info, EptData* ept_data)
+_Use_decl_annotations_ static void TruthDisableVarHiding(const HideInformation& info, EptData* ept_data)
 {
 	// ring-3 start 
 	ULONG64 newPA = 0;
@@ -514,7 +515,7 @@ _Use_decl_annotations_ static void kDisableVarHiding(const HideInformation& info
 }
 // Set MTF on the current processor
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void ShpSetMonitorTrapFlag(HiddenData* sh_data, bool enable) 
+_Use_decl_annotations_ static void TruthSetMonitorTrapFlag(HiddenData* sh_data, bool enable)
 {
   VmxProcessorBasedControls vm_procctl = {
       static_cast<unsigned int>(UtilVmRead(VmcsField::kCpuBasedVmExecControl))};
@@ -524,7 +525,7 @@ _Use_decl_annotations_ static void ShpSetMonitorTrapFlag(HiddenData* sh_data, bo
 
 
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void kSaveLastHideInfo(HiddenData* sh_data, const HideInformation& info) 
+_Use_decl_annotations_ static void TruthSaveLastHideInfo(HiddenData* sh_data, const HideInformation& info)
 {
 	KLOCK_QUEUE_HANDLE lock_handle = {};
 	NT_ASSERT(!sh_data->UserModeBackup);	
@@ -532,7 +533,7 @@ _Use_decl_annotations_ static void kSaveLastHideInfo(HiddenData* sh_data, const 
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static const HideInformation* kRestoreLastHideInfo(
+_Use_decl_annotations_ static const HideInformation* TruthRestoreLastHideInfo(
 	_In_ HiddenData* sh_data
 ) 
 {

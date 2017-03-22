@@ -57,7 +57,7 @@ _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void TruthFreeSharedHiddenData(
 	_In_ ShareDataContainer* shared_sh_data);
    
-_IRQL_requires_min_(DISPATCH_LEVEL) void ShHandleMonitorTrapFlag(
+_IRQL_requires_min_(DISPATCH_LEVEL) void TruthHandleMonitorTrapFlag(
     _In_ HiddenData* sh_data,
     _In_ ShareDataContainer* shared_sh_data, _In_ EptData* ept_data);
 
@@ -72,11 +72,11 @@ _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C bool TruthCreateNewHiddenNode(
 	_In_ PVOID64 mdl,
 	_In_ PEPROCESS proc);
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS kStartHiddenEngine();
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS TruthStartHiddenEngine();
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS kStopHiddenEngine();
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS TruthStopHiddenEngine();
 
-_IRQL_requires_min_(DISPATCH_LEVEL) bool kHandleEptViolation(
+_IRQL_requires_min_(DISPATCH_LEVEL) bool TruthHandleEptViolation(
 	_In_ HiddenData* sh_data,
 	_In_ ShareDataContainer* shared_sh_data, 
 	_In_ EptData* ept_data,
@@ -86,37 +86,37 @@ _IRQL_requires_min_(DISPATCH_LEVEL) bool kHandleEptViolation(
 	_In_ bool  IsWrite,
 	_In_ bool  IsRead); 
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS kDisableHideByProcess(
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS TruthDisableHideByProcess(
 	PEPROCESS proc);
 
-_IRQL_requires_min_(DISPATCH_LEVEL) void kEnableAllMemoryHide(
+_IRQL_requires_min_(DISPATCH_LEVEL) void TruthEnableAllMemoryHide(
 	_In_ HiddenData* data,
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data);
 
 
-_IRQL_requires_min_(DISPATCH_LEVEL) void kDisableSingleMemoryHide(
+_IRQL_requires_min_(DISPATCH_LEVEL) void TruthDisableSingleMemoryHide(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data,
 	_In_ PEPROCESS proc
 );
 
-_Use_decl_annotations_ void kRemoveSingleHideNode(
+_Use_decl_annotations_ void TruthRemoveSingleHideNode(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data,
 	_In_ PEPROCESS proc
 );
 
-_IRQL_requires_min_(DISPATCH_LEVEL) void kDisableAllMemoryHide(
+_IRQL_requires_min_(DISPATCH_LEVEL) void TruthDisableAllMemoryHide(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data);
 
-_Use_decl_annotations_ void kRemoveAllHideNode(
+_Use_decl_annotations_ void TruthRemoveAllHideNode(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data
 );
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C PMDLX GetHideMDL(
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C PMDLX TruthGetHideMDL(
 	_In_ ShareDataContainer* shared_sh_data, 
 	_In_ PEPROCESS proc);
  
