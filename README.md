@@ -26,7 +26,7 @@ Basically, we could use x64dbg to editing the text section of notepad as followi
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195372/6a76313a-0f34-11e7-8e0d-3832297f69b2.png" width="70%" height="70%"> </img>
  
-Open a notepad.exe(x64) and VTxRing3.exe, by clicking on LoadDriver to loading NoTruth driver: 
+Open a notepad.exe(x64) and VTxRing3.exe with administrator, by clicking on LoadDriver to loading NoTruth driver: 
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195373/6aa062d4-0f34-11e7-9819-c7bdbdbe8203.png" width="30%" height="30%"> </img>
 
