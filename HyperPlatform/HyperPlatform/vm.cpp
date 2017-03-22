@@ -121,12 +121,6 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
 
 // Checks if a VMM can be installed, and so, installs it
 
-//初始化整個VM機制
-// 1. 檢測是否已經安裝VM
-// 2. 檢測機器是否支持VT
-// 3. 初始化HOOKDATA,和自定義的一份MSR
-// 4. 遍歷每一個核心, 利用vmcall回調 使進入VMM
-// 5. 進入VMM後
 ShareDataContainer* sharedata;
 _Use_decl_annotations_ NTSTATUS VmInitialization() {
   //頁面對齊
@@ -140,7 +134,6 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
   if (!VmpIsVmxAvailable()) {
     return STATUS_HV_FEATURE_UNAVAILABLE;
   }
-  //初始化MSR-Bitmap並建立一份空的HOOKDATA數組
   //Prepared a MST-Bitmap and EMPTY HOOKDATA data array
 
   const auto shared_data = VmpInitializeSharedData();
@@ -149,30 +142,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
   }
 
   // Virtualize all processors
- 
-  // 透過DPC, 分發虛擬化回調
-  // 虛擬化過程大致流程如下:
-  
-  // 對於當前CPU (回調為:vmpstartVM)
-  // 1. 分配ProcessorData
-  // 2. ProcessorData->ept_data << 構建EPT頁表
-  // 3. ProcessorData->sh_data  << 分配及初始化ShadowHookData , 保留最後處理的一次數據
-  // 4. 分配vmm用的棧
-  // 5. 從分配到的地址,加上大小 = 棧起始地址 (因為棧是向下發展)
-  // 6. 壓入ProcessorData指針
-  // 7. 再壓入MAXULONG_PTR
-  // 8. 以後就是可用的真正棧基址及空間
-  // 9. Processor_data->shared_data << shared_data 參數上下文
-  //10. 分配VMX-Region 及 VMCS, 它們的維護結構同一?->從而初始化填充vmcs各個域-> 如設置VMEXIT回調函數 -> 其中函數VmmVmExitHandler為核心, 分發exit原因
-  //11. 啟動-> vmcs設置後 -> 用匯編VMLAUNCH指令, 啟動VM
 
-  //
-  //因此: 每一個CPU都有自己一份數據.....
-  //其中包括: 
-  //1. cpu自己的棧空間大小等..
-  //2. ept頁表(processor_data->ept_data)							 
-  //3. 最後一次處理的EPT_Violation數據(processor_data->sh_data)   ; EPT_Violation時保存, MTF時恢復
-  //4. 共用的hook code/hide data數組(shared_data->shared_sh_data ; 用於EPT_violation時
   auto status = UtilForEachProcessor(VmpStartVM, shared_data);
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVM, nullptr);
@@ -252,14 +222,10 @@ _Use_decl_annotations_ static NTSTATUS VmpSetLockBitCallback(void *context) {
 }
 
 // Initialize shared processor data
-// 初始化共享數據 
-// 1. 初始化MSR?圖
-// 2. 初始化Hook data數組
 _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData() 
 {
   PAGED_CODE();
 
-  //分配非分?內存 shared_data 管理hook數據
   const auto shared_data = reinterpret_cast<SharedProcessorData *>(ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(SharedProcessorData),
                             kHyperPlatformCommonPoolTag));
   if (!shared_data) {
@@ -270,8 +236,6 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   HYPERPLATFORM_LOG_DEBUG("SharedData=        %p", shared_data);
 
   // Set up the MSR bitmap
-
-  //自定義MSR位圖
   const auto msr_bitmap = ExAllocatePoolWithTag(NonPagedPoolNx, PAGE_SIZE,
                                                 kHyperPlatformCommonPoolTag);
   if (!msr_bitmap) {
@@ -284,7 +248,6 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   shared_data->msr_bitmap = msr_bitmap;
 
   // Checks MSRs causing #GP and should not cause VM-exit from 0 to 0xfff.
-  //檢測?得的MSR會否發生#GP異常
   bool unsafe_msr_map[0x1000] = {};
   for (auto msr = 0ul; msr < RTL_NUMBER_OF(unsafe_msr_map); ++msr) {
     __try {
@@ -295,16 +258,13 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   }
 
   // Activate VM-exit for RDMSR against all MSRs
-  //bitmap 高低位
   const auto bitmap_read_low = reinterpret_cast<UCHAR *>(msr_bitmap);
-  const auto bitmap_read_high = bitmap_read_low + 1024;	//加一?大小
+  const auto bitmap_read_high = bitmap_read_low + 1024;	
 
-  //用0xFF初始化
   RtlFillMemory(bitmap_read_low, 1024, 0xff);   // read        0 -     1fff
   RtlFillMemory(bitmap_read_high, 1024, 0xff);  // read c0000000 - c0001fff
 
   // But ignore IA32_MPERF (000000e7) and IA32_APERF (000000e8)
-  // 初始化位圖
   RTL_BITMAP bitmap_read_low_header = {};
   RtlInitializeBitMap(&bitmap_read_low_header, reinterpret_cast<PULONG>(bitmap_read_low), 1024 * 8);
   RtlClearBits(&bitmap_read_low_header, 0xe7, 2);
@@ -324,7 +284,6 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   RtlClearBits(&bitmap_read_high_header, 0x101, 2);
 
   // Set up shared shadow hook data
-  // 共享勾子數組
   shared_data->shared_sh_data = ShAllocateSharedShaowHookData();
   if (!shared_data->shared_sh_data) {
     ExFreePoolWithTag(msr_bitmap, kHyperPlatformCommonPoolTag);
@@ -340,18 +299,6 @@ _Use_decl_annotations_ static NTSTATUS VmpStartVM(void *context)
   HYPERPLATFORM_LOG_INFO("Initializing VMX for the processor %d.",
                          KeGetCurrentProcessorNumberEx(nullptr));
 
-  // 對於當前CPU
-  // 1. 分配ProcessorData
-  // 2. ProcessorData->ept_data << 構建EPT頁表
-  // 3. ProcessorData->sh_data  << 分配及初始化ShadowHookData 填充勾子詳細資料
-  // 4. 分配vmm用的棧
-  // 5. 從分配到的地址,加上大小 = 棧?域地址 (因為棧是向下發展)
-  // 6. 壓入ProcessorData指針
-  // 7. 再壓入MAXULONG_PTR
-  // 8. 以後就是可用的真正棧基址及空間
-  // 9. Processor_data->shared_data << shared_data 參數上下文
-  //10. 分配VMX-Region 及 VMCS, 它們的維?結構同一?->?而初始化填充vmcs各?域-> 如?置VMEXIT回?函數 -> 其中函數VmmVmExitHandler為核心, 分發exit原因
-  //11. 啟動-> vmcs?置後 -> ?用匯編VMLAUNCH指令, 啟動VM
   const auto ok = AsmInitializeVm(VmpInitializeVm, context);
 
   NT_ASSERT(VmpIsVmmInstalled() == ok);
@@ -366,33 +313,17 @@ _Use_decl_annotations_ static NTSTATUS VmpStartVM(void *context)
 }
 
 // Allocates structures for virtualization, initializes VMCS and virtualizes
-// the current processor
-// 對於當前CPU
-// 1. 分配ProcessorData
-// 2. ProcessorData->ept_data << 構建EPT?表
-// 3. ProcessorData->sh_data  << 分配及初始化ShadowHookData ??勾子?細?料
-// 4. 分配vmm用的棧
-// 5. 從分配到的地址,加上大小 = 棧?域地址 (因為棧是向下發展)
-// 6. 壓入ProcessorData指?
-// 7. 再壓入MAXULONG_PTR
-// 8. 以後就是可用的真正棧基址及空?
-// 9. Processor_data->shared_data << shared_data 參數上下文
-//10. 分配VMX-Region 及 VMCS, 它們的維?結構同一?->?而初始化填充vmcs各?域-> 如?置VMEXIT回?函數 -> 其中函數VmmVmExitHandler為核心, 分發exit原因
-//11. 啟動-> vmcs?置後 -> ?用匯編VMLAUNCH指令, 啟動VM
 _Use_decl_annotations_ static void VmpInitializeVm(
-    ULONG_PTR guest_stack_pointer,		//啟動VM時的棧指?
-	ULONG_PTR guest_instruction_pointer,//啟動VM時的RIP/EIP
-    void *context						//?出SharedProcessorData上下文(包含了CPU共享數據, MSR位圖,以及內存?藏的HOOK結構等)
-) {					
-
-  //把當前CPU使用的數據 參考參數定義..
+    ULONG_PTR guest_stack_pointer,		 
+	ULONG_PTR guest_instruction_pointer, 
+    void *context						 
+) {					 
   const auto shared_data = reinterpret_cast<SharedProcessorData *>(context);
   if (!shared_data) {
     return;
   }
 
-  // Allocate related structures
-  // 保管並管理所有vmx要用的數據
+  // Allocate related structures 
   const auto processor_data = reinterpret_cast<ProcessorData *>(ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(ProcessorData), kHyperPlatformCommonPoolTag));
   
   if (!processor_data) {
@@ -515,8 +446,7 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data
   const Ia32VmxBasicMsr vmx_basic_msr = {UtilReadMsr64(Msr::kIa32VmxBasic)};
 
   processor_data->vmxon_region->revision_identifier = vmx_basic_msr.fields.revision_identifier;
-  
-  //?取對應?域的物理地址
+   
   auto vmxon_region_pa = UtilPaFromVa(processor_data->vmxon_region);
   
   if (__vmx_on(&vmxon_region_pa)) {
@@ -527,8 +457,7 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data
   return true;
 }
 
-// See: VMM SETUP & TEAR DOWN
-// 初始化VMCS
+// See: VMM SETUP & TEAR DOWN 
 _Use_decl_annotations_ static bool VmpInitializeVMCS(ProcessorData *processor_data) {
   // Write a VMCS revision identifier
 
@@ -736,8 +665,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kCr0ReadShadow, __readcr0());		
   error |= UtilVmWrite(VmcsField::kCr4ReadShadow, __readcr4());		
 
-  /* Natural-Width Guest-State Fields */
-  //保存cr0 , cr3 , cr4
+  /* Natural-Width Guest-State Fields */ 
   error |= UtilVmWrite(VmcsField::kGuestCr0, __readcr0());			
   error |= UtilVmWrite(VmcsField::kGuestCr3, __readcr3());			
   error |= UtilVmWrite(VmcsField::kGuestCr4, __readcr4());			
@@ -882,13 +810,11 @@ _Use_decl_annotations_ static ULONG_PTR VmpGetSegmentBaseByDescriptor(
 _Use_decl_annotations_ static ULONG VmpAdjustControlValue(
     Msr msr, ULONG requested_value) {
   LARGE_INTEGER msr_value = {};
-
-  //?取當野MSR的值
-  msr_value.QuadPart = UtilReadMsr64(msr);
-  //要修正的值
+   
+  msr_value.QuadPart = UtilReadMsr64(msr); 
   auto adjusted_value = requested_value;
 
-  // bit == 0 in high word ==> must be zero 不肯定..
+  // bit == 0 in high word ==> must be zero 
   adjusted_value &= msr_value.HighPart;
   // bit == 1 in low word  ==> must be one
   adjusted_value |= msr_value.LowPart;

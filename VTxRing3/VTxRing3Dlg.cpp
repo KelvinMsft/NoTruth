@@ -207,7 +207,8 @@ cDrvCtrl drv;
 void CVTxRing3Dlg::OnBnClickedOk()
 {
 	CString err;
-	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest4", "NoTruthtest4")) {
+	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest4", "NoTruthtest4")) 
+	{
 		if (drv.Start())
 		{
 			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
@@ -240,16 +241,14 @@ void CVTxRing3Dlg::OnBnClickedOk()
 				}
 				
 				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(UCHAR), oldProtect, NULL);
-
-
+				 
 				if (!pid)
 				{
 					transferData2 = { 0 };
 				}
 
 				if (drv.Open("\\\\.\\NoTruth"))
-				{
-
+				{ 
 					if (transferData2.Address && transferData2.ProcID)
 						if (!drv.IoControl(IOCTL_HIDE, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
 						{
