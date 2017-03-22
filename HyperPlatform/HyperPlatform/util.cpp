@@ -187,7 +187,7 @@ static MmAllocateContiguousNodeMemoryType
 //
 // implementations
 //
-
+//-----------------------------------------------------------------------------------------//
 // Initializes utility functions
 _Use_decl_annotations_ NTSTATUS UtilInitialization(PDRIVER_OBJECT driver_object) {
   PAGED_CODE();
@@ -196,7 +196,7 @@ _Use_decl_annotations_ NTSTATUS UtilInitialization(PDRIVER_OBJECT driver_object)
   if (!NT_SUCCESS(status)) {
     return status;
   }
-  //初始化物理內存描述?域
+
   status = UtilpInitializePhysicalMemoryRanges();
   if (!NT_SUCCESS(status)) {
     return status;
@@ -208,6 +208,7 @@ _Use_decl_annotations_ NTSTATUS UtilInitialization(PDRIVER_OBJECT driver_object)
   return status;
 }
 
+//-----------------------------------------------------------------------------------------//
 // Terminates utility functions
 _Use_decl_annotations_ void UtilTermination() {
   PAGED_CODE();
@@ -217,7 +218,7 @@ _Use_decl_annotations_ void UtilTermination() {
                       kHyperPlatformCommonPoolTag);
   }
 }
-
+//-----------------------------------------------------------------------------------------//
 // Locates RtlPcToFileHeader
 _Use_decl_annotations_ static NTSTATUS UtilpInitializeRtlPcToFileHeader(
     PDRIVER_OBJECT driver_object) {
@@ -243,7 +244,7 @@ _Use_decl_annotations_ static NTSTATUS UtilpInitializeRtlPcToFileHeader(
   g_utilp_RtlPcToFileHeader = UtilpUnsafePcToFileHeader;
   return STATUS_SUCCESS;
 }
-
+//-----------------------------------------------------------------------------------------//
 // A fake RtlPcToFileHeader without accquireing PsLoadedModuleSpinLock. Thus, it
 // is unsafe and should be updated if we can locate PsLoadedModuleSpinLock.
 _Use_decl_annotations_ static PVOID NTAPI
@@ -265,14 +266,13 @@ UtilpUnsafePcToFileHeader(PVOID pc_value, PVOID *base_of_image) {
   }
   return nullptr;
 }
-
+//-----------------------------------------------------------------------------------------//
 // A wrapper of RtlPcToFileHeader
 _Use_decl_annotations_ PVOID UtilPcToFileHeader(PVOID pc_value) {
   void *base = nullptr;
   return g_utilp_RtlPcToFileHeader(pc_value, &base);
 }
-
-//初始化物理內存描述?域
+//-----------------------------------------------------------------------------------------//
 _Use_decl_annotations_ static NTSTATUS UtilpInitializePhysicalMemoryRanges() {
   PAGED_CODE();
 
@@ -284,28 +284,24 @@ _Use_decl_annotations_ static NTSTATUS UtilpInitializePhysicalMemoryRanges() {
 
   g_utilp_physical_memory_ranges = ranges;
 
-  //遍歷內存塊(參考UtilpBuildPhysicalMemoryRanges)
-  for (auto i = 0ul; i < ranges->number_of_runs; ++i) {
+   for (auto i = 0ul; i < ranges->number_of_runs; ++i) {
     const auto base_addr =
         static_cast<ULONG64>(ranges->run[i].base_page) * PAGE_SIZE;
     HYPERPLATFORM_LOG_DEBUG("Physical Memory Range: %016llx - %016llx",
                             base_addr,
                             base_addr + ranges->run[i].page_count * PAGE_SIZE);
   }
-  //物理內存塊?面總數*?面大小 = 可用的?續的物理內存大小
-  const auto pm_size = static_cast<ULONG64>(ranges->number_of_pages) * PAGE_SIZE;
+   const auto pm_size = static_cast<ULONG64>(ranges->number_of_pages) * PAGE_SIZE;
 
-  //得到KB數
-  HYPERPLATFORM_LOG_DEBUG("Physical Memory Total: %llu KB", pm_size / 1024);
+   HYPERPLATFORM_LOG_DEBUG("Physical Memory Total: %llu KB", pm_size / 1024);
 
   return STATUS_SUCCESS;
 }
-
+//-----------------------------------------------------------------------------------------//
 // Builds the physical memory ranges
 _Use_decl_annotations_ static PhysicalMemoryDescriptor *UtilpBuildPhysicalMemoryRanges() {
   PAGED_CODE();
-
-  //?取物理內存塊數組 , 內存塊表示?續的內存為一?內存塊
+   
   const auto pm_ranges = MmGetPhysicalMemoryRanges();
   if (!pm_ranges) {
     return nullptr;
@@ -313,58 +309,25 @@ _Use_decl_annotations_ static PhysicalMemoryDescriptor *UtilpBuildPhysicalMemory
 
   PFN_COUNT number_of_runs = 0;
   PFN_NUMBER number_of_pages = 0;
-
-  //從物理內存的基址?始遍歷;
-  //?算內存塊數量;
-  //?算每?內存塊佔有多少?;
+   
   for (;;++number_of_runs) 
-  {
-	//?取下一?內存塊指?
+  { 
     const auto range = &pm_ranges[number_of_runs];
 
-	//QuadPart代表有符?64位數, 再?有內存塊則退出
-    if (!range->BaseAddress.QuadPart && !range->NumberOfBytes.QuadPart) 
+     if (!range->BaseAddress.QuadPart && !range->NumberOfBytes.QuadPart) 
 	{
       break;
-    }
-	//得到內存塊的?面
+    } 
     number_of_pages += static_cast<PFN_NUMBER>(BYTES_TO_PAGES(range->NumberOfBytes.QuadPart));
   }
-  
-  //?有一塊?續的內存可用
+   
   if (number_of_runs == 0) {
     ExFreePoolWithTag(pm_ranges, 'hPmM');
     return nullptr;
-  }
+  } 
+   const auto memory_block_size = sizeof(PhysicalMemoryDescriptor) + sizeof(PhysicalMemoryRun) * (number_of_runs - 1);
 
-  //分配物理內存塊:
-  /*
-	PhysicalMemoryDescriptor
-	{	
-		PFN_COUNT number_of_runs;    /// 地址PFN數量
-		PFN_NUMBER number_of_pages;  /// 物理?面的數量
-		PhysicalMemoryRun run[1];    ///< ranges of addresses
-	}
-	PhysicalMemoryRun
-	{ 
-		ULONG_PTR base_page;   //?面?碼,< A base addrress / PAGE_SIZE (ie, 0x1 for 0x1000)
-		ULONG_PTR page_count;  //?面數量,< A number of pages
-	}
-
-	內存塊布局如下:
-		PhysicalMemoryDescriptor 
-		PhysicalMemoryRun
-		PhysicalMemoryRun
-		PhysicalMemoryRun
-		....
-		PhysicalMemoryRun <---有多少可用內存塊(?續的內存)
-  */
-
-  //內存描述?域: (找到的內存塊數量+找到的內存塊?面大小) + (一?PhysicalMemoryRun數組[大小為找到的內存塊數目-1])
-  const auto memory_block_size = sizeof(PhysicalMemoryDescriptor) + sizeof(PhysicalMemoryRun) * (number_of_runs - 1);
-
-  //分配內存描述?域 在非分?內存 
-  const auto pm_block = reinterpret_cast<PhysicalMemoryDescriptor *>(
+   const auto pm_block = reinterpret_cast<PhysicalMemoryDescriptor *>(
 	  ExAllocatePoolWithTag(NonPagedPoolNx, memory_block_size, kHyperPlatformCommonPoolTag));
 
   if (!pm_block) {
@@ -373,52 +336,32 @@ _Use_decl_annotations_ static PhysicalMemoryDescriptor *UtilpBuildPhysicalMemory
   }
   RtlZeroMemory(pm_block, memory_block_size);
 
-  //可用的內存塊數量
-  pm_block->number_of_runs = number_of_runs;
-  //可用內存塊合?的?面總數
-  pm_block->number_of_pages = number_of_pages;
+   pm_block->number_of_runs = number_of_runs;
+   pm_block->number_of_pages = number_of_pages;
 
-  //遍歷所有內存塊
-  for (auto run_index = 0ul; run_index < number_of_runs; run_index++) 
+   for (auto run_index = 0ul; run_index < number_of_runs; run_index++) 
   {
-	//當前內存描述符結構?中的內存塊,供後面填充
-    auto current_run = &pm_block->run[run_index];
-	//內存塊
-    auto current_block = &pm_ranges[run_index];
-	//?取物理地址的PFN
-    current_run->base_page = static_cast<ULONG_PTR>(UtilPfnFromPa(current_block->BaseAddress.QuadPart));
-	//內存塊總數?取?面數量
-    current_run->page_count = static_cast<ULONG_PTR>(BYTES_TO_PAGES(current_block->NumberOfBytes.QuadPart));
+     auto current_run = &pm_block->run[run_index];
+     auto current_block = &pm_ranges[run_index];
+     current_run->base_page = static_cast<ULONG_PTR>(UtilPfnFromPa(current_block->BaseAddress.QuadPart));
+     current_run->page_count = static_cast<ULONG_PTR>(BYTES_TO_PAGES(current_block->NumberOfBytes.QuadPart));
   }
 
   ExFreePoolWithTag(pm_ranges, 'hPmM');
-
-  /* 
-   *  已經初始化了pm_block 內存塊數組:
-   *  總括一下內容:
-      pm_block->number_of_runs		; 內存塊數量
-	  pm_block->number_of_page		; 內存塊的?面總大小
-	  pm_block->run[1]				; 數組包含以下結構 
-					  -> base_page	; 對應內存塊的基址
-					  -> page_count ; 對應內存塊的?面數量
-   */
-
-  //返回物理內存描述?域
+    
   return pm_block;
 }
-
+//-----------------------------------------------------------------------------------------//
 // Returns the physical memory ranges
 /*_Use_decl_annotations_*/ const PhysicalMemoryDescriptor *
 UtilGetPhysicalMemoryRanges() {
   return g_utilp_physical_memory_ranges;
 }
-
+//-----------------------------------------------------------------------------------------//
 // Execute a given callback routine on all processors in DPC_LEVEL. Returns
 // STATUS_SUCCESS when all callback returned STATUS_SUCCESS as well. When
 // one of callbacks returns anything but STATUS_SUCCESS, this function stops
 // to call remaining callbacks and returns the value.
-
-// 在所有?理器在DPC_LEVEL時侯, ?用參數傳入的回?函數,
 _Use_decl_annotations_ NTSTATUS UtilForEachProcessor(NTSTATUS (*callback_routine)(void *), void *context) {
   
   const auto number_of_processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
@@ -631,37 +574,45 @@ _Use_decl_annotations_ ULONG64 UtilPaFromVa(void *va) {
   const auto pa = MmGetPhysicalAddress(va);
   return pa.QuadPart;
 }
-
+//-----------------------------------------------------------------------//
 // VA -> PFN
-_Use_decl_annotations_ PFN_NUMBER UtilPfnFromVa(void *va) {
+_Use_decl_annotations_ PFN_NUMBER UtilPfnFromVa(void *va) 
+{
   return UtilPfnFromPa(UtilPaFromVa(va));
 }
 
+//-----------------------------------------------------------------------//
 // PA -> PFN
-_Use_decl_annotations_ PFN_NUMBER UtilPfnFromPa(ULONG64 pa) {
+_Use_decl_annotations_ PFN_NUMBER UtilPfnFromPa(ULONG64 pa) 
+{
   return static_cast<PFN_NUMBER>(pa >> PAGE_SHIFT);
 }
 
+//-----------------------------------------------------------------------//
 // PA -> VA
-_Use_decl_annotations_ void *UtilVaFromPa(ULONG64 pa) {
+_Use_decl_annotations_ void *UtilVaFromPa(ULONG64 pa) 
+{
   PHYSICAL_ADDRESS pa2 = {};
   pa2.QuadPart = pa;
   return MmGetVirtualForPhysical(pa2);
 }
 
+//-----------------------------------------------------------------------//
 // PNF -> PA
-_Use_decl_annotations_ ULONG64 UtilPaFromPfn(PFN_NUMBER pfn) {
+_Use_decl_annotations_ ULONG64 UtilPaFromPfn(PFN_NUMBER pfn) 
+{
   return pfn << PAGE_SHIFT;
 }
 
+//-----------------------------------------------------------------------//
 // PFN -> VA
-_Use_decl_annotations_ void *UtilVaFromPfn(PFN_NUMBER pfn) {
+_Use_decl_annotations_ void *UtilVaFromPfn(PFN_NUMBER pfn) 
+{
   return UtilVaFromPa(UtilPaFromPfn(pfn));
 }
 
+//-----------------------------------------------------------------------//
 // Allocates continuous physical memory
-
-//分配?續的物理內存
 _Use_decl_annotations_ void *UtilAllocateContiguousMemory(
     SIZE_T number_of_bytes) {
   PHYSICAL_ADDRESS highest_acceptable_address = {};
@@ -683,12 +634,15 @@ _Use_decl_annotations_ void *UtilAllocateContiguousMemory(
 #pragma warning(pop)
   }
 }
-
+//-----------------------------------------------------------------------//
 // Frees an address allocated by UtilAllocateContiguousMemory()
-_Use_decl_annotations_ void UtilFreeContiguousMemory(void *base_address) {
+_Use_decl_annotations_ void UtilFreeContiguousMemory(void *base_address) 
+{
   MmFreeContiguousMemory(base_address);
 }
 
+
+//-----------------------------------------------------------------------//
 // Executes VMCALL
 _Use_decl_annotations_ NTSTATUS UtilVmCall(HypercallNumber hypercall_number,
                                            void *context)
@@ -708,7 +662,7 @@ _Use_decl_annotations_ NTSTATUS UtilVmCall(HypercallNumber hypercall_number,
     return status;
   }
 }
-
+//-----------------------------------------------------------------------//
 // Debug prints registers
 _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
                                                 ULONG_PTR stack_pointer) {
@@ -746,7 +700,7 @@ _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
     KeLowerIrql(current_irql);
   }
 }
-
+//-----------------------------------------------------------------------//
 // Reads natural-width VMCS
 _Use_decl_annotations_ ULONG_PTR UtilVmRead(VmcsField field) {
   size_t field_value = 0;
@@ -759,7 +713,7 @@ _Use_decl_annotations_ ULONG_PTR UtilVmRead(VmcsField field) {
   }
   return field_value;
 }
-
+//-----------------------------------------------------------------------//
 // Reads 64bit-width VMCS
 _Use_decl_annotations_ ULONG64 UtilVmRead64(VmcsField field) {
 #if defined(_AMD64_)
@@ -777,6 +731,7 @@ _Use_decl_annotations_ ULONG64 UtilVmRead64(VmcsField field) {
 #endif
 }
 
+//-----------------------------------------------------------------------//
 // Writes natural-width VMCS
 _Use_decl_annotations_ VmxStatus UtilVmWrite(VmcsField field,
                                              ULONG_PTR field_value) {
@@ -790,6 +745,7 @@ _Use_decl_annotations_ VmxStatus UtilVmWrite(VmcsField field,
   return vmx_status;
 }
 
+//-----------------------------------------------------------------------//
 // Writes 64bit-width VMCS
 _Use_decl_annotations_ VmxStatus UtilVmWrite64(VmcsField field,
                                                ULONG64 field_value) {

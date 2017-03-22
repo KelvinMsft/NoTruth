@@ -29,11 +29,13 @@ BOOL cDrvCtrl::GetSvcHandle(PCHAR pServiceName)
 
 BOOL cDrvCtrl::Install(PCHAR pSysPath, PCHAR pServiceName, PCHAR pDisplayName)
 {
+ 
 	BOOLEAN ret = FALSE;
 	CString err;
 	m_pSysPath = pSysPath;
 	m_pServiceName = pServiceName;
 	m_pDisplayName = pDisplayName;
+Init:
 	m_hSCManager = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
 	if (NULL == m_hSCManager)
 	{
@@ -54,9 +56,8 @@ BOOL cDrvCtrl::Install(PCHAR pSysPath, PCHAR pServiceName, PCHAR pDisplayName)
 			m_hService = OpenServiceA(m_hSCManager, m_pServiceName, SERVICE_ALL_ACCESS);
 			if (NULL == m_hService)
 			{
-				m_dwLastError = GetLastError();
-				err.Format(L"OpenService ERR: %X\r\n", m_dwLastError);
-				OutputDebugString(err);
+				DeleteService(m_hService);
+				goto Init;
 				CloseServiceHandle(m_hSCManager);
 				ret = FALSE;
 			}

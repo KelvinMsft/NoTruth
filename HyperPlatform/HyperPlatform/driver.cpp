@@ -28,21 +28,20 @@ typedef struct _TRANSFER_IOCTL
 	ULONG64 ProcID;
 	ULONG64 HiddenType;
 	ULONG64 Address;
-}TRANSFERIOCTL, *PTRANSFERIOCTL;
+}TRANSFERIOCTL, *PTRANSFERIOCTL; 
 
-#define DDI_WIN32_DEVICE_NAME_A		"\\\\.\\NoTruth"
-#define DDI_WIN32_DEVICE_NAME_W		L"\\\\.\\NoTruth"
-#define DDI_DEVICE_NAME_A			"\\Device\\NoTruth"
-#define DDI_DEVICE_NAME_W			L"\\Device\\NoTruth"
-#define DDI_DOS_DEVICE_NAME_A		"\\DosDevices\\NoTruth"
-#define DDI_DOS_DEVICE_NAME_W		L"\\DosDevices\\NoTruth"
+#define NO_TRUTH_WIN32_DEVICE_NAME_A		"\\\\.\\NoTruth"
+#define NO_TRUTH_WIN32_DEVICE_NAME_W		L"\\\\.\\NoTruth"
+#define NO_TRUTH_DEVICE_NAME_A			"\\Device\\NoTruth"
+#define NO_TRUTH_DEVICE_NAME_W			L"\\Device\\NoTruth"
+#define NO_TRUTH_DOS_DEVICE_NAME_A		"\\DosDevices\\NoTruth"
+#define NO_TRUTH_DOS_DEVICE_NAME_W		L"\\DosDevices\\NoTruth"
 typedef struct _DEVICE_EXTENSION
 {
 	ULONG  StateVariable;
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
-ULONG64 G_cr3;
-UCHAR* testpool;
+
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -87,7 +86,7 @@ _IRQL_requires_max_(PASSIVE_LEVEL) bool DriverpIsSuppoetedOS();
 // implementations
 //
 //--------------------------------------------------------------------------------------//
-NTSTATUS DispatchHideEngineIOCTL(
+NTSTATUS DispatchNoTruthCore(
 			IN PVOID InputBuffer,				
 			IN ULONG InputBufferLength,			
 			IN PVOID OutputBuffer,				
@@ -95,23 +94,43 @@ NTSTATUS DispatchHideEngineIOCTL(
 			IN ULONG IoControlCode,
 			IN PIO_STATUS_BLOCK pIoStatus)
 {
-	NTSTATUS status = STATUS_SUCCESS;
-	PTRANSFERIOCTL data = (PTRANSFERIOCTL)InputBuffer;
-	PEPROCESS hiddenProc; 
-	if (IoControlCode == IOCTL_HIDE) 
+	PEPROCESS  hiddenProc;
+	PTRANSFERIOCTL data;
+	NTSTATUS	 status = STATUS_UNSUCCESSFUL;  
+	switch (IoControlCode)
 	{
-		HYPERPLATFORM_LOG_DEBUG("[HIDE]Hide engine IOCTL Dispatching %x \r\n" , IoControlCode);
+		case IOCTL_HIDE_ADD: 
+			data = (PTRANSFERIOCTL)InputBuffer;
+			hiddenProc;
+			if (data)
+			{
+				HYPERPLATFORM_LOG_DEBUG("Proc ID: %I64X Address : %I64X", data->ProcID, data->Address);
+				PsLookupProcessByProcessId((HANDLE)data->ProcID, &hiddenProc);
+				AddMemoryHide(hiddenProc, data->Address);
+				status = STATUS_SUCCESS;
+			}
+		break;
+
+		case IOCTL_HIDE_START:
+		{
+			status = StartMemoryHide();
+		}
+		break;
+
+		case IOCTL_HIDE_STOP:
+		{
+			status = StopMemoryHide();
+		}
+		break;
+
+	default:
+		break;
 	}
-	if (data)
-	{
-		HYPERPLATFORM_LOG_DEBUG("Proc ID: %I64X Address : %I64X", data->ProcID, data->Address);
-		PsLookupProcessByProcessId((HANDLE)data->ProcID, &hiddenProc);
-		HiddenStartByIOCTL(hiddenProc, data->Address);
-	}
+ 
 	return status;
 }
 //--------------------------------------------------------------------------------------//
-NTSTATUS DDI_devCtrlRoutine(
+NTSTATUS NoTruthDeviceCtrlRoutine(
 	IN PDEVICE_OBJECT		DeviceObject,
 	IN PIRP					Irp
 )
@@ -123,8 +142,6 @@ NTSTATUS DDI_devCtrlRoutine(
 	PVOID				inputBuffer, outputBuffer;				
 	ULONG				inputBufferLength, outputBufferLength;	
 	ULONG				ioControlCode;
-
-	/*	dprintf("[$XTR]--->IrpMjXTRdevCtrlRoutine( 0x%08x, 0x%08x ).\n", DeviceObject, Irp);*/
 
 	pIrpStack = IoGetCurrentIrpStackLocation(Irp);
 	deviceExtension = (PDEVICE_EXTENSION)DeviceObject->DeviceExtension;
@@ -166,7 +183,7 @@ NTSTATUS DDI_devCtrlRoutine(
 		//
 		DbgPrint("[$XTR] IRP_MJ_DEVICE_CONTROL->IrpMjXTRdevCtrlRoutine(DeviceObject=0x%08x, Irp=0x%08x)->ARKioControl().\n", DeviceObject, Irp);
 
-		DispatchHideEngineIOCTL(inputBuffer,	
+		DispatchNoTruthCore(inputBuffer,	
 			inputBufferLength,		
 			outputBuffer,			
 			outputBufferLength,		
@@ -189,16 +206,16 @@ NTSTATUS DDI_devCtrlRoutine(
 // A driver entry point
 //--------------------------------------------------------------------------------------//
 _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
-                                            PUNICODE_STRING registry_path) {
-	BOOLEAN symbolicLink;
-	UNICODE_STRING		ntDeviceName;
-	UNICODE_STRING		dosDeviceName;
- 
-	PDEVICE_EXTENSION		deviceExtension = NULL; 
-	
-
+                                            PUNICODE_STRING registry_path) 
+{
   UNREFERENCED_PARAMETER(registry_path);
+  
   PAGED_CODE();
+  
+  UNICODE_STRING		ntDeviceName;
+  UNICODE_STRING		dosDeviceName;
+  
+  PDEVICE_EXTENSION	deviceExtension = NULL; 
   
   static const wchar_t kLogFilePath[] = L"\\SystemRoot\\NoTruth.log";
   
@@ -207,20 +224,9 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
                          : kLogPutLevelDebug | kLogOptDisableFunctionName;
  
   auto status = STATUS_UNSUCCESSFUL;
-  int i = 0;
-
- // testpool = reinterpret_cast<UCHAR*>(ExAllocatePoolWithTag(
-//	  NonPagedPool, PAGE_SIZE, kHyperPlatformCommonPoolTag));
-  testpool = reinterpret_cast<UCHAR*>(ExAllocatePool(
-	  NonPagedPool, PAGE_SIZE));
-
-  RtlFillMemory(testpool, 1024, 0x90);
-  
+   
   driver_object->DriverUnload = DriverpDriverUnload;
-
-  
-  //HYPERPLATFORM_COMMON_DBG_BREAK();
-
+   
   // Request NX Non-Paged Pool when available
   ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
 
@@ -268,7 +274,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
     LogRegisterReinitialization(driver_object);
   }
   
-  RtlInitUnicodeString(&ntDeviceName, DDI_DEVICE_NAME_W);
+  RtlInitUnicodeString(&ntDeviceName, NO_TRUTH_DEVICE_NAME_W);
   
   status = IoCreateDevice(
 	  driver_object,
@@ -290,7 +296,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 
   deviceExtension = (PDEVICE_EXTENSION)deviceObject->DeviceExtension;
    
-  RtlInitUnicodeString(&dosDeviceName, DDI_DOS_DEVICE_NAME_W);
+  RtlInitUnicodeString(&dosDeviceName, NO_TRUTH_DOS_DEVICE_NAME_W);
 
   status = IoCreateSymbolicLink(&dosDeviceName, &ntDeviceName);
 
@@ -299,17 +305,15 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 	  DbgPrint("[$XTR] IoCreateSymbolicLink failed(0x%x).\n", status);
 	  return FALSE;
   }
-	
-  symbolicLink = TRUE;
 
   driver_object->MajorFunction[IRP_MJ_CREATE] = 
   driver_object->MajorFunction[IRP_MJ_CLOSE] =
-  driver_object->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DDI_devCtrlRoutine;
+  driver_object->MajorFunction[IRP_MJ_DEVICE_CONTROL] = NoTruthDeviceCtrlRoutine;
    
   HYPERPLATFORM_LOG_INFO("The VMM has been installed.");
   return status;
 }
-
+//-------------------------------------------------------------//
 // Unload handler
 _Use_decl_annotations_ static void DriverpDriverUnload(
     PDRIVER_OBJECT driver_object) {
@@ -319,7 +323,7 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
   HYPERPLATFORM_COMMON_DBG_BREAK();
   UNICODE_STRING		ntDeviceName;
   UNICODE_STRING		dosDeviceName;
-  RtlInitUnicodeString(&dosDeviceName, DDI_DOS_DEVICE_NAME_W);
+  RtlInitUnicodeString(&dosDeviceName, NO_TRUTH_DOS_DEVICE_NAME_W);
   driver_object->DeviceObject = deviceObject;
   IoDeleteDevice(deviceObject);
   IoDeleteSymbolicLink(&dosDeviceName );
@@ -329,7 +333,7 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
   PerfTermination();
   LogTermination();
 }
-
+//-------------------------------------------------------------//
 // Test if the system is one of supported OS versions
 _Use_decl_annotations_ bool DriverpIsSuppoetedOS() {
   PAGED_CODE();
@@ -349,6 +353,7 @@ _Use_decl_annotations_ bool DriverpIsSuppoetedOS() {
   }
   return true;
 }
+//-------------------------------------------------------------//
 
 }  // extern "C"
 

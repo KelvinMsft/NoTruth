@@ -27,7 +27,10 @@
 #define CTL_CODE_HIDE(i)	\
 	CTL_CODE(FILE_DEVICE_HIDE, IOCTL_BASE+i, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#define IOCTL_HIDE				CTL_CODE_HIDE(1)			//初始化
+#define IOCTL_HIDE_ADD				CTL_CODE_HIDE(1)			//初始化
+#define IOCTL_HIDE_START			CTL_CODE_HIDE(2)			//初始化
+#define IOCTL_HIDE_STOP				CTL_CODE_HIDE(3)			//初始化
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // types
@@ -42,17 +45,19 @@ extern ShareDataContainer* sharedata;
 // prototypes
 //
 
-_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS
-    NoTruthInitialization(_In_ ShareDataContainer* shared_sh_data);
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS NoTruthInitialization(
+	_In_ ShareDataContainer* shared_sh_data
+);
 
 _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C void NoTruthTermination();
+  
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS AddMemoryHide(
+	PEPROCESS proc, 
+	ULONG64 address
+);
 
-typedef struct HideInputInfo{
-	PVOID	  hiddenAddr;
-	PEPROCESS proc;
-}HIDEINPUTINFO, *PHIDEINPUTINFO;
-
-VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 address);
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS StartMemoryHide();
+_IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS  StopMemoryHide();
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables

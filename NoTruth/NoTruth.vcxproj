@@ -147,7 +147,7 @@
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp" />
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vmm.cpp" />
     <ClCompile Include="NoTruth.cpp" />
-    <ClCompile Include="shadow_hook.cpp" />
+    <ClCompile Include="MemoryHide.cpp" />
     <ClCompile Include="Ring3Hide.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -164,7 +164,7 @@
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vm.h" />
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h" />
     <ClInclude Include="NoTruth.h" />
-    <ClInclude Include="shadow_hook.h" />
+    <ClInclude Include="MemoryHide.h" />
     <ClInclude Include="Ring3Hide.h" />
   </ItemGroup>
   <ItemGroup>

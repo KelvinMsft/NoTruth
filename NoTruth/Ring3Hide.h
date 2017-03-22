@@ -4,7 +4,7 @@
 #include "ntifs.h"
 #include <fltKernel.h>
 #include <string>
-#include <shadow_hook.h>
+#include <MemoryHide.h>
 #define NTSTRSAFE_NO_CB_FUNCTIONS
 #include <ntstrsafe.h>
 #include "../HyperPlatform/HyperPlatform/common.h"
@@ -28,7 +28,7 @@ struct MyPage {
 	~MyPage(); 
 };
 
-struct ShadowHookData;
+struct HiddenData;
 struct HideInformation {
 	void* patch_address;  // An address where a hook is installed
 	void* handler;        // An address of the handler routine
@@ -40,20 +40,17 @@ struct HideInformation {
 	std::shared_ptr<MyPage> shadow_page_base_for_exec;  //VA for exec hooking page of created / retrieved page of Original page
 
 													// Phyisical address of the above two copied pages
-	ULONG64 pa_base_for_rw;							//PA of above
-	ULONG64 pa_base_for_exec;						//PA of above
-
+	ULONG_PTR	pa_base_for_rw;							//PA of above
+	ULONG_PTR	pa_base_for_exec;						//PA of above
+	ULONG_PTR	pa_base_original_page;
 													// Name
 	string name;
 
 	PEPROCESS proc;									
-	ULONG64 NewPhysicalAddress;						//use for compare new and old address when Copy-on-write occur		
-	bool isRing3;							
+	ULONG64 NewPhysicalAddress;						//use for compare new and old address when Copy-on-write occur							
 
 	ULONG64 CR3;
-	PVOID64 MDL;  
-	bool isExit;
-	bool isDelete;
+	PVOID64 MDL;   
 };
 
 class VariableHiding
@@ -68,13 +65,12 @@ public:
 	};
 	
 	//unique_ptr cannot use with extern type !!!
-	std::unique_ptr<HideInformation> CreateHidingInformation(
+	std::unique_ptr<HideInformation> CreateNoTruthNode(
 		PVOID address, 
 		string name,
 	    ULONG64 CR3,
 		PVOID64 mdl,
-		PEPROCESS proc,
-		bool isRing3,
+		PEPROCESS proc, 
 		ULONG64 physicalAddress);
 	
 	VOID set_global_array(ShareDataContainer* data) {

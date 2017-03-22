@@ -202,122 +202,158 @@ DWORD FindProcessId(WCHAR*processname)
 	return result;
 }
 cDrvCtrl drv;
-
-
-void CVTxRing3Dlg::OnBnClickedOk()
+//--------------------------------------------------------------------------------------------------------------------//
+BOOL WipeCopyOnWrite(
+	_In_ HANDLE				 handle, 
+	_In_ TRANSFERIOCTL TransferData
+)
 {
+	BOOL				ret = FALSE;
+	CString						err;
+	UCHAR			 	  value = 0;
+	ULONG			 oldProtect = 0;
+
+	do {
+		// Start Wipe
+		if (!VirtualProtectEx(handle, (LPVOID)TransferData.Address, sizeof(value), PAGE_EXECUTE_WRITECOPY, &oldProtect))
+		{
+			err.Format(L"VirtualProtect1 - LastError: %d \r\n", GetLastError());
+			OutputDebugString(err);
+			break;
+		}
+		//Read an original value
+		if (!ReadProcessMemory(handle, (LPVOID)TransferData.Address, &value, sizeof(value), NULL))
+		{
+			err.Format(L"ReadProcessMemory - LastError: %d \r\n", GetLastError());
+			OutputDebugString(err);
+			break;
+		}
+
+		//Wipe a Copy on Write, write a value, System will create a page for me
+		if (!WriteProcessMemory(handle, (PVOID)TransferData.Address, &value, 1, NULL))
+		{
+			err.Format(L"WriteProcessMemory  - LastError: %d \r\n", GetLastError()); 
+			OutputDebugString(err);
+			VirtualProtectEx(handle, (LPVOID)TransferData.Address, sizeof(value), oldProtect, NULL);
+			break;
+		}
+
+		// Stop Wipe
+		if (!VirtualProtectEx(handle, (LPVOID)TransferData.Address, sizeof(value), oldProtect, &oldProtect))
+		{ 
+			err.Format(L"VirtualProtectEx  - LastError: %d \r\n", GetLastError());
+			OutputDebugString(err);
+			break; 
+		}
+
+		err.Format(L"[NOTEPAD]ProcID: %x Address1: %X oldValue : %X \r\n", TransferData.ProcID, TransferData.Address, value);
+		OutputDebugString(err);
+
+		ret = TRUE;
+
+	} while (false);
+
+	return ret;
+}
+
+#define DRV_PATH		"C:\\NoTruth.sys"
+#define SERVICE_NAME	"NoTruthtest4"
+#define DISPLAY_NAME	SERVICE_NAME
+void CVTxRing3Dlg::OnBnClickedOk()
+{ 
+	ULONG	OutBuffer, RetBytes;
+	TRANSFERIOCTL transferData2 = { 0 };
+	DWORD					pid = (DWORD)FindProcessId(L"notepad.exe");
+	HANDLE				 handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+ 
+
+	PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
+	PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
+
 	CString err;
-	if (drv.Install("C:\\NoTruth.sys", "NoTruthtest4", "NoTruthtest4")) 
+
+	transferData2.ProcID = pid;
+	transferData2.HiddenType = 0x0;
+	transferData2.Address = (ULONG64)NtCreateFile;
+
+
+	//Create Service
+	if (!drv.Install(DRV_PATH, SERVICE_NAME, DISPLAY_NAME))
 	{
-		if (drv.Start())
-		{
-			PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-			PVOID NtCreateFile = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
-			if (NtCreateThread)
-			{
-				DWORD oldProtect;
-				ULONG OutBuffer, RetBytes;
-				TRANSFERIOCTL transferData2 = { 0 };
-				DWORD pid = (DWORD)FindProcessId(L"notepad.exe");
-				transferData2.ProcID = pid;
-				transferData2.HiddenType = 0x0;
-				transferData2.Address = (ULONG64)NtCreateFile;
-				HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-				UCHAR  value = 0;
-				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(value), PAGE_EXECUTE_WRITECOPY, &oldProtect);
-				ReadProcessMemory(handle, (LPVOID)transferData2.Address, &value, sizeof(value), NULL);
-				err.Format(L"[NOTEPAD]ProcID: %x Address1: %X oldValue : %X \r\n", transferData2.ProcID, transferData2.Address, value);
-				OutputDebugString(err);
+		CloseHandle(handle);
+		return;
+	} 
 
-				if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL))
-				{
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL);
-					WriteProcessMemory(handle, (PVOID)transferData2.Address, &value, 1, NULL);
-					OutputDebugStringA("Written process memory \r\n");
-				}
-				else
-				{
-					OutputDebugStringA("written process memory error \r\n");
-				}
-				
-				VirtualProtectEx(handle, (LPVOID)transferData2.Address, sizeof(UCHAR), oldProtect, NULL);
-				 
-				if (!pid)
-				{
-					transferData2 = { 0 };
-				}
-
-				if (drv.Open("\\\\.\\NoTruth"))
-				{ 
-					if (transferData2.Address && transferData2.ProcID)
-						if (!drv.IoControl(IOCTL_HIDE, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
-						{
-							AfxMessageBox(L"Cannot IOCTL device \r\n");
-						}
-					UCHAR bp = 0xCC;
-					UCHAR retv = 0x0;
-					if (WriteProcessMemory(handle, (PVOID)transferData2.Address, &bp, sizeof(UCHAR), NULL))
-					{
-						OutputDebugStringA("Written process memory1 \r\n");
-						ReadProcessMemory(handle, (PVOID)transferData2.Address, &retv, sizeof(UCHAR), NULL);
-						err.Format(L"[notepad]ProcID: %x Address1: %X newValue : %X \r\n", transferData2.ProcID, transferData2.Address, *(PUCHAR)transferData2.Address);
-						OutputDebugString(err);
-					}
-				}
-				else
-				{
-					AfxMessageBox(L"Cannot open device \r\n");
-				}
-
-				CloseHandle(handle);
-				CloseHandle(drv.m_hDriver);
-			}
-		}
-		else
-		{
-			err.Format(L"Cannot start driver ERR 2 : %X \r\n", GetLastError());
-			AfxMessageBox(err);
-		}
+	//Start Service
+	if (!drv.Start())
+	{
+		drv.Remove();
+		CloseHandle(handle);
+		return;
 	}
+  
+	OutputDebugStringA("Change Page Attribute to Writable \r\n");
+ 
+	if (!WipeCopyOnWrite(handle, transferData2))
+	{
+		drv.Stop();
+		drv.Remove();
+		CloseHandle(handle);
+		return;
+	}
+	
+	OutputDebugStringA("Wiped Copy-On-Write \r\n"); 
+	OutputDebugStringA("Change Page Attribute to Original \r\n");
+	  
+	if (!drv.Open("\\\\.\\NoTruth"))
+	{ 
+		drv.Stop();
+		drv.Remove();
+		CloseHandle(handle); 
+		return;
+	}
+	if (!drv.IoControl(IOCTL_HIDE_ADD, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
+	{
+		drv.Stop();
+		drv.Remove();
+		CloseHandle(handle);
+		return;
+		AfxMessageBox(L"Cannot IOCTL device \r\n");
+	}
+
+	if (!drv.IoControl(IOCTL_HIDE_START, NULL, 0, NULL, 0, &RetBytes))
+	{
+		drv.Stop();
+		drv.Remove();
+		CloseHandle(handle);
+		return;
+		AfxMessageBox(L"Cannot IOCTL device \r\n");
+	}
+	 
+
+ 	CloseHandle(handle);
+	CloseHandle(drv.m_hDriver);
+
+	OutputDebugStringA("Successfully Hide \r\n"); 
 }
 
 
 void CVTxRing3Dlg::OnBnClickedCancel()
 {
 	CDialog::OnCancel();
+	 
+	drv.Stop();
+	drv.Remove();
 }
 
 
 void CVTxRing3Dlg::OnBnClickedButton1()
 {
-	CString err;
-	PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-	if (NtCreateThread)
-	{
-		ULONG OutBuffer, RetBytes;
-		TRANSFERIOCTL transferData = { 0 };
-		transferData.ProcID = GetCurrentProcessId();
-		transferData.HiddenType = 0x0;
-		transferData.Address = (ULONG64)NtCreateThread;
-		err.Format(L"ProcID: %x Address: %X", transferData.ProcID, transferData.Address);
-		OutputDebugString(err);
-		if (drv.Open("\\\\.\\NoTruth")) 
-		{
-			if (!drv.IoControl(IOCTL_HIDE, &transferData, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes)) 
-			{
-				AfxMessageBox(L"Cannot IOCTL device \r\n");
-			}
-		}
-		else {
-			AfxMessageBox(L"Cannot open device \r\n");
-		}
-	}
 }
 
 void CVTxRing3Dlg::OnBnClickedButton2()
 {
 	// TODO: Add your control notification handler code here
 	drv.Stop();
-	drv.Remove();
-
+	drv.Remove(); 
 }

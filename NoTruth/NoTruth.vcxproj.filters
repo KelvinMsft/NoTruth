@@ -2,35 +2,35 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="..\HyperPlatform\HyperPlatform\driver.cpp" />
-    <ClCompile Include="..\HyperPlatform\HyperPlatform\ept.cpp">
-      <Filter>VMM</Filter>
-    </ClCompile>
-    <ClCompile Include="NoTruth.cpp">
-      <Filter>VMM</Filter>
-    </ClCompile>
     <ClCompile Include="..\HyperPlatform\HyperPlatform\kernel_stl.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="..\HyperPlatform\HyperPlatform\performance.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="Ring3Hide.cpp">
-      <Filter>NoTruth</Filter>
-    </ClCompile>
-    <ClCompile Include="shadow_hook.cpp">
-      <Filter>NoTruth</Filter>
+      <Filter>Common\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\HyperPlatform\HyperPlatform\log.cpp">
-      <Filter>Common</Filter>
+      <Filter>Common\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\performance.cpp">
+      <Filter>Common\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\HyperPlatform\HyperPlatform\util.cpp">
-      <Filter>Common</Filter>
+      <Filter>Common\Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp">
-      <Filter>VMM</Filter>
+    <ClCompile Include="Ring3Hide.cpp">
+      <Filter>NoTruth\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\ept.cpp">
+      <Filter>VMM\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="NoTruth.cpp">
+      <Filter>VMM\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\HyperPlatform\HyperPlatform\vmm.cpp">
-      <Filter>VMM</Filter>
+      <Filter>VMM\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\HyperPlatform\vm.cpp">
+      <Filter>VMM\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="MemoryHide.cpp">
+      <Filter>NoTruth\Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -59,12 +59,6 @@
     <ClInclude Include="..\HyperPlatform\HyperPlatform\performance.h">
       <Filter>Common\Header</Filter>
     </ClInclude>
-    <ClInclude Include="Ring3Hide.h">
-      <Filter>NoTruth</Filter>
-    </ClInclude>
-    <ClInclude Include="shadow_hook.h">
-      <Filter>NoTruth</Filter>
-    </ClInclude>
     <ClInclude Include="..\HyperPlatform\HyperPlatform\util.h">
       <Filter>Common\Header</Filter>
     </ClInclude>
@@ -76,6 +70,12 @@
     </ClInclude>
     <ClInclude Include="..\HyperPlatform\HyperPlatform\vmm.h">
       <Filter>VMM\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Ring3Hide.h">
+      <Filter>NoTruth\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryHide.h">
+      <Filter>NoTruth\Header</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -107,6 +107,18 @@
     </Filter>
     <Filter Include="VMM\asm">
       <UniqueIdentifier>{47dab3c2-0816-43ab-978a-03b1db832f9f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Source">
+      <UniqueIdentifier>{b102ff74-3b4b-43a2-99e8-e2da7c20bf85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="NoTruth\Header">
+      <UniqueIdentifier>{ffd50322-97bc-4912-8cf4-026e1b6e21a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="NoTruth\Source">
+      <UniqueIdentifier>{ca471809-d8aa-42d3-8111-818036a720fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VMM\Source">
+      <UniqueIdentifier>{86cdcc3a-f34e-49a1-9aa8-b89aaec1e3df}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

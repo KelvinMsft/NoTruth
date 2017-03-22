@@ -16,7 +16,7 @@
 #define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 #endif  // HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER
 #include "performance.h"
-#include "../../NoTruth/shadow_hook.h"
+#include "../../NoTruth/MemoryHide.h"
 
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
@@ -883,7 +883,6 @@ _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {
 }
 
 // VMCALL
-// ÖØ?vmcallÖ¸Áî
 _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context) 
 {
   // VMCALL for Sushi expects that cx holds a command number, and dx holds an
@@ -935,10 +934,10 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
     guest_context->vm_continue = false;
 
   } 
-  else if (hypercall_number == HypercallNumber::kShEnableVarHiding) {
+  else if (hypercall_number == HypercallNumber::kEnableAllHideMemory)
+  {
 	  //set GVA->GPA -----> EPT PTE entry to read-only
-	  
-	  kEnableVarHiding(
+	  kEnableAllMemoryHide(
 		  guest_context->stack->processor_data->sh_data,
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
@@ -950,8 +949,9 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
 	  guest_context->flag_reg.fields.zf = false;
 	  UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
   }
-  else if (hypercall_number == HypercallNumber::kShdisableVarHiding) {
-	  kVmCallDisableVarHiding(
+  else if (hypercall_number == HypercallNumber::kDisableAllHideMemory) 
+  {
+	  kDisableAllMemoryHide(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );
@@ -960,11 +960,47 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
 	  guest_context->flag_reg.fields.zf = false;
 	  UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
   }
-  else if (hypercall_number == HypercallNumber::kIndependentHiding) {
-	  kVmCallDisableVarHidingIndependently(
+
+  else if (hypercall_number == HypercallNumber::kDisableSingleHideMemory) {
+	 
+	  kDisableSingleMemoryHide(
+		  guest_context->stack->processor_data->ept_data,
+		  guest_context->stack->processor_data->shared_data->shared_sh_data,
+		  (PEPROCESS)context
+	  );
+	  VmmpAdjustGuestInstructionPointer(guest_context->ip);
+	  guest_context->flag_reg.fields.cf = false;
+	  guest_context->flag_reg.fields.zf = false;
+	  UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
+  }
+  else if (hypercall_number == HypercallNumber::kRemoveSingleHideNode)
+  { 
+	  kRemoveSingleHideNode(
+		  guest_context->stack->processor_data->ept_data,
+		  guest_context->stack->processor_data->shared_data->shared_sh_data,
+		  (PEPROCESS)context
+	  );
+	  VmmpAdjustGuestInstructionPointer(guest_context->ip);
+	  guest_context->flag_reg.fields.cf = false;
+	  guest_context->flag_reg.fields.zf = false;
+	  UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
+  }
+  else if (hypercall_number == HypercallNumber::kRemoveAllHideNode)
+  {
+	  kRemoveAllHideNode(
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );
+
+	  VmmpAdjustGuestInstructionPointer(guest_context->ip);
+	  guest_context->flag_reg.fields.cf = false;
+	  guest_context->flag_reg.fields.zf = false;
+	  UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all); (
+		  guest_context->stack->processor_data->ept_data,
+		  guest_context->stack->processor_data->shared_data->shared_sh_data,
+		  (PEPROCESS)context
+	  );
+
 	  VmmpAdjustGuestInstructionPointer(guest_context->ip);
 	  guest_context->flag_reg.fields.cf = false;
 	  guest_context->flag_reg.fields.zf = false;
@@ -1013,7 +1049,13 @@ _Use_decl_annotations_ static void VmmpHandleEptMisconfig(
 
   const auto fault_address = UtilVmRead(VmcsField::kGuestPhysicalAddress);
   const auto ept_pt_entry = EptGetEptPtEntry(
-      guest_context->stack->processor_data->ept_data, fault_address);
+      guest_context->stack->processor_data->ept_data, fault_address); 
+  HYPERPLATFORM_LOG_INFO("ReadAcceess: %x \r\n", ept_pt_entry->fields.read_access);
+  HYPERPLATFORM_LOG_INFO("WriteAcceess: %x \r\n", ept_pt_entry->fields.write_access); 
+  HYPERPLATFORM_LOG_INFO("ExecAcceess: %x \r\n", ept_pt_entry->fields.execute_access); 
+  HYPERPLATFORM_LOG_INFO("MemType: %x \r\n", ept_pt_entry->fields.memory_type); 
+  HYPERPLATFORM_LOG_INFO("physial_address: %x \r\n", ept_pt_entry->fields.physial_address);
+   
   HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kEptMisconfigVmExit,
                                  fault_address,
                                  reinterpret_cast<ULONG_PTR>(ept_pt_entry), 0);

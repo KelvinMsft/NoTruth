@@ -14,7 +14,7 @@
 #include "util.h"
 #include "vmm.h"
 #include "../../NoTruth/NoTruth.h"
-#include "../../NoTruth/shadow_hook.h"
+#include "../../NoTruth/MemoryHide.h"
 
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
@@ -106,6 +106,7 @@ static bool VmpIsVmmInstalled();
 //
 // variables
 //
+ShareDataContainer* sharedata;
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -118,19 +119,16 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
   return __segmentlimit(selector);
 }
 #endif
-
+//--------------------------------------------------------------------------//
 // Checks if a VMM can be installed, and so, installs it
-
-ShareDataContainer* sharedata;
-_Use_decl_annotations_ NTSTATUS VmInitialization() {
-  //頁面對齊
+ _Use_decl_annotations_ NTSTATUS VmInitialization() 
+{ 
   PAGED_CODE();
-
-  //判斷是否已經安裝vm
+   
   if (VmpIsVmmInstalled()) {
     return STATUS_CANCELLED;
-  }
-  //通?CPUID判斷是否VMX可用
+  } 
+
   if (!VmpIsVmxAvailable()) {
     return STATUS_HV_FEATURE_UNAVAILABLE;
   }
@@ -148,7 +146,9 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
   }
+
   sharedata = reinterpret_cast<ShareDataContainer*>(shared_data->shared_sh_data);
+
   status = NoTruthInitialization(shared_data->shared_sh_data);
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVM, nullptr);
@@ -156,7 +156,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
   }
   return status;
 }
-
+//--------------------------------------------------------------------------//
 // Checks if the system supports virtualization
 _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
   PAGED_CODE();
@@ -201,9 +201,10 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
   }
   return true;
 }
-
+//--------------------------------------------------------------------------//
 // Sets 1 to the lock bit of the IA32_FEATURE_CONTROL MSR
-_Use_decl_annotations_ static NTSTATUS VmpSetLockBitCallback(void *context) {
+_Use_decl_annotations_ static NTSTATUS VmpSetLockBitCallback(void *context) 
+{
   UNREFERENCED_PARAMETER(context);
 
   Ia32FeatureControlMsr vmx_feature_control = {
@@ -220,7 +221,7 @@ _Use_decl_annotations_ static NTSTATUS VmpSetLockBitCallback(void *context) {
   }
   return STATUS_SUCCESS;
 }
-
+//--------------------------------------------------------------------------//
 // Initialize shared processor data
 _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData() 
 {
@@ -284,7 +285,7 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   RtlClearBits(&bitmap_read_high_header, 0x101, 2);
 
   // Set up shared shadow hook data
-  shared_data->shared_sh_data = ShAllocateSharedShaowHookData();
+  shared_data->shared_sh_data = TruthAllocateSharedDataContainer();
   if (!shared_data->shared_sh_data) {
     ExFreePoolWithTag(msr_bitmap, kHyperPlatformCommonPoolTag);
     ExFreePoolWithTag(shared_data, kHyperPlatformCommonPoolTag);
@@ -292,7 +293,7 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
   }
   return shared_data;
 }
-
+//--------------------------------------------------------------------------//
 // Virtualize the current processor
 _Use_decl_annotations_ static NTSTATUS VmpStartVM(void *context) 
 {
@@ -311,7 +312,7 @@ _Use_decl_annotations_ static NTSTATUS VmpStartVM(void *context)
 
   return STATUS_SUCCESS;
 }
-
+//--------------------------------------------------------------------------//
 // Allocates structures for virtualization, initializes VMCS and virtualizes
 _Use_decl_annotations_ static void VmpInitializeVm(
     ULONG_PTR guest_stack_pointer,		 
@@ -336,8 +337,8 @@ _Use_decl_annotations_ static void VmpInitializeVm(
     goto ReturnFalse;
   }
 
-  
-  processor_data->sh_data = ShAllocateShadowHookData();
+  //for bookkepping.
+  processor_data->sh_data = TruthAllocateHiddenData();
   if (!processor_data->sh_data) {
     goto ReturnFalse;
   }
@@ -421,9 +422,8 @@ ReturnFalseWithVmxOff:;
 ReturnFalse:;
   VmpFreeProcessorData(processor_data);
 }
-
-// See: VMM SETUP & TEAR DOWN
-
+//--------------------------------------------------------------------------//
+// See: VMM SETUP & TEAR DOWN 
 _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data) {
   // Apply FIXED bits
 
@@ -456,7 +456,7 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data
   UtilInveptAll();
   return true;
 }
-
+//--------------------------------------------------------------------------//
 // See: VMM SETUP & TEAR DOWN 
 _Use_decl_annotations_ static bool VmpInitializeVMCS(ProcessorData *processor_data) {
   // Write a VMCS revision identifier
@@ -482,7 +482,7 @@ _Use_decl_annotations_ static bool VmpInitializeVMCS(ProcessorData *processor_da
 
   return true;
 }
-
+//--------------------------------------------------------------------------//
 // See: PREPARATION AND LAUNCHING A VIRTUAL MACHINE
 _Use_decl_annotations_ static bool VmpSetupVMCS(
     const ProcessorData *processor_data, 
@@ -721,6 +721,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   return vmx_status == VmxStatus::kOk;
 }
 
+//--------------------------------------------------------------------------//
 // Executes vmlaunch
 /*_Use_decl_annotations_*/ static void VmpLaunchVM() {
   auto error_code = UtilVmRead(VmcsField::kVmInstructionError);
@@ -738,7 +739,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   }
   HYPERPLATFORM_COMMON_DBG_BREAK();
 }
-
+//--------------------------------------------------------------------------//
 // Returns access right of the segment specified by the SegmentSelector for VMX
 _Use_decl_annotations_ static ULONG VmpGetSegmentAccessRight(
     USHORT segment_selector) {
@@ -756,7 +757,7 @@ _Use_decl_annotations_ static ULONG VmpGetSegmentAccessRight(
   }
   return access_right.all;
 }
-
+//--------------------------------------------------------------------------//
 // Returns a base address of the segment specified by SegmentSelector
 _Use_decl_annotations_ static ULONG_PTR VmpGetSegmentBase(
     ULONG_PTR gdt_base, USHORT segment_selector) {
@@ -779,7 +780,7 @@ _Use_decl_annotations_ static ULONG_PTR VmpGetSegmentBase(
     return VmpGetSegmentBaseByDescriptor(segment_descriptor);
   }
 }
-
+//--------------------------------------------------------------------------//
 // Returns the segment descriptor corresponds to the SegmentSelector
 _Use_decl_annotations_ static SegmentDesctiptor *VmpGetSegmentDescriptor(
     ULONG_PTR descriptor_table_base, USHORT segment_selector) {
@@ -788,6 +789,8 @@ _Use_decl_annotations_ static SegmentDesctiptor *VmpGetSegmentDescriptor(
       descriptor_table_base + ss.fields.index * sizeof(SegmentDesctiptor));
 }
 
+
+//--------------------------------------------------------------------------//
 // Returns a base address of segment_descriptor
 _Use_decl_annotations_ static ULONG_PTR VmpGetSegmentBaseByDescriptor(
     const SegmentDesctiptor *segment_descriptor) {
@@ -806,6 +809,7 @@ _Use_decl_annotations_ static ULONG_PTR VmpGetSegmentBaseByDescriptor(
   return base;
 }
 
+//--------------------------------------------------------------------------//
 // Adjust the requested control value with consulting a value of related MSR
 _Use_decl_annotations_ static ULONG VmpAdjustControlValue(
     Msr msr, ULONG requested_value) {
@@ -821,6 +825,8 @@ _Use_decl_annotations_ static ULONG VmpAdjustControlValue(
   return adjusted_value;
 }
 
+
+//--------------------------------------------------------------------------//
 // Terminates VM
 _Use_decl_annotations_ void VmTermination() {
   PAGED_CODE();
@@ -841,6 +847,7 @@ _Use_decl_annotations_ void VmTermination() {
   NT_ASSERT(!VmpIsVmmInstalled());
 }
 
+//--------------------------------------------------------------------------//
 // De-virtualizing all processors
 _Use_decl_annotations_ static void VmpVmxOffThreadRoutine(void *start_context) {
   UNREFERENCED_PARAMETER(start_context);
@@ -857,6 +864,8 @@ _Use_decl_annotations_ static void VmpVmxOffThreadRoutine(void *start_context) {
   PsTerminateSystemThread(status);
 }
 
+
+//--------------------------------------------------------------------------//
 // Stops virtualization through a hypercall and frees all related memory
 _Use_decl_annotations_ static NTSTATUS VmpStopVM(void *context) {
   UNREFERENCED_PARAMETER(context);
@@ -875,6 +884,8 @@ _Use_decl_annotations_ static NTSTATUS VmpStopVM(void *context) {
   return STATUS_SUCCESS;
 }
 
+
+//--------------------------------------------------------------------------//
 // Frees all related memory
 _Use_decl_annotations_ static void VmpFreeProcessorData(
     ProcessorData *processor_data) {
@@ -892,7 +903,7 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
                       kHyperPlatformCommonPoolTag);
   }
   if (processor_data->sh_data) {
-    ShFreeShadowHookData(processor_data->sh_data);
+	  TruthFreeHiddenData(processor_data->sh_data);
   }
   if (processor_data->ept_data) {
     EptTermination(processor_data->ept_data);
@@ -908,7 +919,7 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
                         kHyperPlatformCommonPoolTag);
     }
     if (processor_data->shared_data->shared_sh_data) {
-      ShFreeSharedShadowHookData(processor_data->shared_data->shared_sh_data);
+		TruthFreeSharedHiddenData(processor_data->shared_data->shared_sh_data);
     }
     ExFreePoolWithTag(processor_data->shared_data, kHyperPlatformCommonPoolTag);
   }
@@ -916,6 +927,8 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
   ExFreePoolWithTag(processor_data, kHyperPlatformCommonPoolTag);
 }
 
+
+//--------------------------------------------------------------------------//
 // Tests if the VMM is already installed using a backdoor command
 /*_Use_decl_annotations_*/ static bool VmpIsVmmInstalled() {
   int cpu_info[4] = {};
@@ -927,5 +940,6 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
   return RtlCompareMemory(vendor_id, "Pong by VMM!\0", sizeof(vendor_id)) ==
          sizeof(vendor_id);
 }
+//--------------------------------------------------------------------------//
 
 }  // extern "C"

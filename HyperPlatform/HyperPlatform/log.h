@@ -45,6 +45,7 @@ extern "C" {
 /// @see HYPERPLATFORM_LOG_DEBUG
 #define HYPERPLATFORM_LOG_ERROR(format, ...) \
   LogpPrint(kLogpLevelError, __FUNCTION__, (format), __VA_ARGS__)
+	 
 
 /// Buffers a message as respective severity
 /// @param format   A format string

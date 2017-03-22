@@ -17,14 +17,14 @@
 #include "../HyperPlatform/HyperPlatform/ept.h"
 #include "../HyperPlatform/HyperPlatform/kernel_stl.h"
 #include <array>
-#include "shadow_hook.h"
+#include "MemoryHide.h"
 #include "Ring3Hide.h"
 ////////////////////////////////////////////////////////////////////////////////
 //
 // macro utilities
 //
 
-#define TargetAppName "calc.exe"
+#define TargetAppName "notepad.exe"
 #define TargetAppName2 "VTxRing3.exe"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -70,8 +70,7 @@ typedef struct _SECURITY_ATTRIBUTES {
 //--------------------------------------------------------------------/
 PMDLX LockMemory(
 	PVOID startAddr,
-	ULONG len,
-	PEPROCESS proc,
+	ULONG len, 
 	PKAPC_STATE apcstate
 )
 {
@@ -89,11 +88,12 @@ PMDLX LockMemory(
 
 	MmProbeAndLockPages(mdl, UserMode, IoReadAccess);
 	
+	HYPERPLATFORM_LOG_INFO("locked Memory \r\n");
 
 	return mdl;
 }
 //--------------------------------------------------------------------------------------//
-void pagingUnlockProcessMemory(
+void UnLockMemory(
 	PEPROCESS proc,
 	PKAPC_STATE apcstate, 
 	PMDLX mdl
@@ -107,6 +107,9 @@ void pagingUnlockProcessMemory(
 	IoFreeMdl(mdl);
 
 	KeUnstackDetachProcess(apcstate);
+
+	HYPERPLATFORM_LOG_INFO("Unlocked Memory \r\n");
+
 }
 
 
@@ -114,30 +117,47 @@ extern "C" {
 	 PCHAR PsGetProcessImageFileName(PEPROCESS);
 }
 //--------------------------------------------------------------------------------------//
-VOID HiddenStartByIOCTL(PEPROCESS proc, ULONG64 Address) {
+NTSTATUS AddMemoryHide(PEPROCESS proc, ULONG64 Address) {
 	
-	KAPC_STATE K; 
-	ULONG64 cr3; 
+	KAPC_STATE ApcState; 
+	ULONG64			cr3; 
+	NTSTATUS	status = STATUS_UNSUCCESSFUL;
+	PMDLX		mdl = NULL;
+	KeStackAttachProcess(proc, &ApcState);
 
-	KeStackAttachProcess(proc, &K);
 	cr3 = __readcr3(); 
-	//ensure physical memory
-	PMDLX mdl = LockMemory((PVOID)Address, PAGE_SIZE, proc, &K);
 
-	kInitHiddenEngine(
+	//ensure resides in physical memory 
+	mdl = LockMemory((PVOID)Address, PAGE_SIZE, &ApcState);
+
+	if (TruthCreateNewHiddenNode(
 		reinterpret_cast<ShareDataContainer*>(sharedata), //included two list var_hide and hook_hide
-		(PVOID)Address,										//Ring-3 hidden address, PE-Header
-		0,													//used for callback
-		"calcEproc",										//name
-		true,												//var_hide/ hook_hide list 
-		true,												//Is Ring3 or Ring 0 (TRUE/FALSE)?
+		(PVOID)Address,										//Ring-3 hidden address, PE-Header 
+		"calcEproc",										//name 
 		MmGetPhysicalAddress((PVOID)Address).QuadPart,		//Physical address used for Copy-On-Write
 		cr3,
 		mdl,
 		proc
-	);
-	kStartHiddenEngine();
-	KeUnstackDetachProcess(&K);
+	))
+	{
+		status = STATUS_SUCCESS;
+	}
+	 
+	KeUnstackDetachProcess(&ApcState);
+
+	return status;
+}
+
+//--------------------------------------------------------------------------------------//
+NTSTATUS StartMemoryHide()
+{ 
+	return kStartHiddenEngine(); 
+}
+
+//--------------------------------------------------------------------------------------//
+NTSTATUS StopMemoryHide()
+{
+	return kStopHiddenEngine();
 }
 
 //--------------------------------------------------------------------------------------//
@@ -149,23 +169,28 @@ VOID ProcessMonitor(
 	char *procName;
 	PEPROCESS proc;
 	PsLookupProcessByProcessId(ProcessId, &proc);
-	procName = PsGetProcessImageFileName(proc);
-
+	procName = PsGetProcessImageFileName(proc); 
 	if (strncmp(TargetAppName, procName, strlen(TargetAppName)) == 0||
 		strncmp(TargetAppName2, procName, strlen(TargetAppName2)) == 0)
 	{
-		if (Create) 
-		{
+		HYPERPLATFORM_LOG_INFO("Process %s Exiting...  \r\n", procName);
 
+		if (Create) 
+		{ 
+			// do nothing.
 		}
 		else
 		{
+			HYPERPLATFORM_LOG_INFO("Process Exiting... \r\n");
 			PMDLX mdl = GetHideMDL(reinterpret_cast<ShareDataContainer*>(sharedata), proc);
-			SetTerminateProcess(reinterpret_cast<ShareDataContainer*>(sharedata), proc);
+		 
+			//hyper-call
 			kDisableHideByProcess(proc);
-			if (mdl) {
+			 
+			if (mdl)
+			{
 				KAPC_STATE apcstate;
-				pagingUnlockProcessMemory(proc, &apcstate, mdl);
+				UnLockMemory(proc, &apcstate, mdl); 
 			}
 		}
 	}
@@ -178,7 +203,7 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS NoTruthInitialization(ShareDataContaine
 
   NTSTATUS status = STATUS_SUCCESS; 
   PsSetCreateProcessNotifyRoutine(ProcessMonitor, FALSE);
-  return status;
+   return status;
 }
 //--------------------------------------------------------------------------------------//
 // Terminates NoTruth
@@ -186,8 +211,7 @@ _Use_decl_annotations_ EXTERN_C void NoTruthTermination() {
   PAGED_CODE();
 
   kStopHiddenEngine();
-  PsSetCreateProcessNotifyRoutine(ProcessMonitor, TRUE);
-  UtilSleep(500);
+  PsSetCreateProcessNotifyRoutine(ProcessMonitor, TRUE); 
   HYPERPLATFORM_LOG_INFO("NoTruth has been terminated.");
 }
 //--------------------------------------------------------------------------------------//

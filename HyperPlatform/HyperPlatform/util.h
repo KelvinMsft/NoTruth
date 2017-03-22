@@ -67,9 +67,11 @@ constexpr VmxStatus operator|=(_In_ VmxStatus lhs, _In_ VmxStatus rhs) {
 /// Avaialable command numbers for VMCALL
 enum class HypercallNumber {
   kTerminateVmm,                ///< Terminates VMM
-  kShEnableVarHiding,
-  kShdisableVarHiding,
-  kIndependentHiding,
+  kEnableAllHideMemory,			///< Start hide all user memory in List
+  kDisableAllHideMemory,		///< Stop  hide all user memory in List
+  kDisableSingleHideMemory,		///< Stop  hide a user memory in List with specific EPROCESS
+  kRemoveSingleHideNode,		///< Remove a entry in list
+  kRemoveAllHideNode,			///< Remove all entry in list
 };
 
 ////////////////////////////////////////////////////////////////////////////////
