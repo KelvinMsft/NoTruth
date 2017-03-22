@@ -51,6 +51,7 @@ Init:
 
 	if (NULL == m_hService)
 	{
+		m_dwLastError = GetLastError(); 
 		if (ERROR_SERVICE_EXISTS == m_dwLastError)
 		{
 			m_hService = OpenServiceA(m_hSCManager, m_pServiceName, SERVICE_ALL_ACCESS);
@@ -62,14 +63,6 @@ Init:
 				ret = FALSE;
 			}
 			ret = TRUE;
-		}
-		else
-		{
-			m_dwLastError = GetLastError();
-			err.Format(L"CreateService ERR: %X\r\n", m_dwLastError);
-			OutputDebugString(err);
-			CloseServiceHandle(m_hSCManager);
-			ret = FALSE;
 		}
 	}
 	else
