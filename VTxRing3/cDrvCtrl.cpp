@@ -35,46 +35,57 @@ BOOL cDrvCtrl::Install(PCHAR pSysPath, PCHAR pServiceName, PCHAR pDisplayName)
 	m_pSysPath = pSysPath;
 	m_pServiceName = pServiceName;
 	m_pDisplayName = pDisplayName;
+ 
+
 Init:
 	m_hSCManager = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-	if (NULL == m_hSCManager)
+	if (!m_hSCManager)
 	{
 		m_dwLastError = GetLastError();
 		err.Format(L"m_hSCManager NULL ERR: %X\r\n", m_dwLastError);
 		OutputDebugString(err);
 		ret = FALSE;
+		return ret;
 	}
 
 	m_hService = CreateServiceA(m_hSCManager, m_pServiceName, m_pDisplayName,
 		SERVICE_ALL_ACCESS, SERVICE_KERNEL_DRIVER, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL,
 		m_pSysPath, NULL, NULL, NULL, NULL, NULL);
+	
+	if (!m_hService)
+	{ 
+		m_dwLastError = GetLastError();
+		err.Format(L"m_hService NULL ERR: %X\r\n", m_dwLastError);
+		OutputDebugString(err);
+		ret = FALSE; 
+	}
 
-	if (NULL == m_hService)
+	m_dwLastError = GetLastError(); 
+	if (ERROR_SERVICE_EXISTS == m_dwLastError)
 	{
-		m_dwLastError = GetLastError(); 
-		if (ERROR_SERVICE_EXISTS == m_dwLastError)
-		{
-			m_hService = OpenServiceA(m_hSCManager, m_pServiceName, SERVICE_ALL_ACCESS);
-			if (NULL == m_hService)
-			{
-				DeleteService(m_hService);
-				goto Init;
-				CloseServiceHandle(m_hSCManager);
-				ret = FALSE;
-			}
-			ret = TRUE;
-		}
+		m_hService = OpenServiceA(m_hSCManager, m_pServiceName, SERVICE_ALL_ACCESS); 
+		err.Format(L"m_dwLastError NULL ERR: %X\r\n", m_dwLastError);
+		OutputDebugString(err);
+		ret = TRUE;
+	}
+	else if(m_dwLastError == NOERROR)
+	{
+		m_hService = OpenServiceA(m_hSCManager, m_pServiceName, SERVICE_ALL_ACCESS);  
+		err.Format(L"m_dwLastError NULL ERR: %X\r\n", m_dwLastError);
+		OutputDebugString(err);
+		ret = TRUE;
 	}
 	else
 	{
-		ret = TRUE;
-	}
+		err.Format(L"m_dwLastError NULL ERR: %X\r\n", m_dwLastError); 
+		OutputDebugString(err); 
+	} 
+	CloseServiceHandle(m_hSCManager);
 	return ret;
 }
 
 BOOL cDrvCtrl::Start()
 {
-	GetSvcHandle(m_pServiceName);
 	if (!StartServiceA(m_hService, NULL, NULL))
 	{
 		return FALSE;
@@ -87,13 +98,13 @@ BOOL cDrvCtrl::Stop()
 	BOOLEAN ret = TRUE;
 	SERVICE_STATUS ss;
 	CString str;
-	GetSvcHandle(m_pServiceName);
 	if (!ControlService(m_hService, SERVICE_CONTROL_STOP, &ss))
 	{
 		m_dwLastError = GetLastError();
 		str.Format(L"Stop error: %x", m_dwLastError);
 		ret = FALSE;
 	}
+
 	return ret;
 
 }
@@ -102,6 +113,7 @@ BOOL cDrvCtrl::Remove()
 {
 	BOOLEAN ret = TRUE;;
 	CString str;
+
 	GetSvcHandle(m_pServiceName);
 	if (!DeleteService(m_hService))
 	{
@@ -109,8 +121,12 @@ BOOL cDrvCtrl::Remove()
 		str.Format(L"Remove error: %x", m_dwLastError);
 		OutputDebugString(str);
 		ret = FALSE;
-	}
+	}  
+	CloseServiceHandle(m_hService);
+	CloseServiceHandle(m_hSCManager);
+	 
 	m_hService = NULL;
+	m_hSCManager = NULL; 
 	return ret;
 }
 
