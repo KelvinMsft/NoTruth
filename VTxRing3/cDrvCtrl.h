@@ -21,20 +21,18 @@ public:
 public:
 	DWORD m_dwLastError;
 	PCHAR m_pSysPath;
-	PCHAR m_pServiceName;
+	PWCHAR m_pServiceName;
 	PCHAR m_pDisplayName;
 	HANDLE m_hDriver;
 	SC_HANDLE m_hSCManager;
 	SC_HANDLE m_hService;
 public:
 	BOOL Install(PCHAR pSysPath, PCHAR pServiceName, PCHAR pDisplayName);
-	BOOL Start();
-	BOOL Stop();
-	BOOL Remove();
-	BOOL Open(PCHAR pLinkName);
-	BOOL IoControl(DWORD dwIoCode, PVOID InBuff, DWORD InBuffLen, PVOID OutBuff, DWORD OutBuffLen, DWORD *RealRetBytes);
+	BOOL Start(PCHAR pSysPath);
+	BOOL Stop(PCHAR pSysPath);
+	BOOL Remove(PCHAR pSysPath);
+	BOOL IoControl(PCHAR SymbolicName, DWORD dwIoCode, PVOID InBuff, DWORD InBuffLen, PVOID OutBuff, DWORD OutBuffLen, DWORD *RealRetBytes);
 private:
-	BOOL GetSvcHandle(PCHAR pServiceName);
 	DWORD CTL_CODE_GEN(DWORD lngFunction);
 protected:
 	//null

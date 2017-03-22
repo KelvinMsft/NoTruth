@@ -257,7 +257,7 @@ BOOL WipeCopyOnWrite(
 }
 
 #define DRV_PATH		"C:\\NoTruth.sys"
-#define SERVICE_NAME	"NoTruthtest4"
+#define SERVICE_NAME	"NoTruthtest5"
 #define DISPLAY_NAME	SERVICE_NAME
 void CVTxRing3Dlg::OnBnClickedOk()
 { 
@@ -280,14 +280,17 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	//Create Service
 	if (!drv.Install(DRV_PATH, SERVICE_NAME, DISPLAY_NAME))
 	{
+		OutputDebugStringA("Change Page A222\r\n");
 		CloseHandle(handle);
 		return;
 	} 
 
 	//Start Service
-	if (!drv.Start())
+	if (!drv.Start(SERVICE_NAME))
 	{
-		drv.Remove();
+		OutputDebugStringA("Change Page 333Attribute to Writable \r\n");
+
+		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
 	}
@@ -296,35 +299,29 @@ void CVTxRing3Dlg::OnBnClickedOk()
  
 	if (!WipeCopyOnWrite(handle, transferData2))
 	{
-		drv.Stop();
-		drv.Remove();
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
 	}
 	
 	OutputDebugStringA("Wiped Copy-On-Write \r\n"); 
 	OutputDebugStringA("Change Page Attribute to Original \r\n");
-	  
-	if (!drv.Open("\\\\.\\NoTruth"))
-	{ 
-		drv.Stop();
-		drv.Remove();
-		CloseHandle(handle); 
-		return;
-	}
-	if (!drv.IoControl(IOCTL_HIDE_ADD, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
+
+
+	if (!drv.IoControl("\\\\.\\NoTruth",IOCTL_HIDE_ADD, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
 	{
-		drv.Stop();
-		drv.Remove();
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
 		AfxMessageBox(L"Cannot IOCTL device \r\n");
 	}
 
-	if (!drv.IoControl(IOCTL_HIDE_START, NULL, 0, NULL, 0, &RetBytes))
+	if (!drv.IoControl("\\\\.\\NoTruth",IOCTL_HIDE_START, NULL, 0, NULL, 0, &RetBytes))
 	{
-		drv.Stop();
-		drv.Remove();
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
 		AfxMessageBox(L"Cannot IOCTL device \r\n");
@@ -332,18 +329,16 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	 
 
  	CloseHandle(handle);
-	CloseHandle(drv.m_hDriver);
-
+ 
 	OutputDebugStringA("Successfully Hide \r\n"); 
 }
 
 
 void CVTxRing3Dlg::OnBnClickedCancel()
 {
-	CDialog::OnCancel();
-	 
-	drv.Stop();
-	drv.Remove();
+	CDialog::OnCancel(); 
+	drv.Stop(SERVICE_NAME);
+	drv.Remove(SERVICE_NAME);
 }
 
 
@@ -354,6 +349,6 @@ void CVTxRing3Dlg::OnBnClickedButton1()
 void CVTxRing3Dlg::OnBnClickedButton2()
 {
 	// TODO: Add your control notification handler code here
-	drv.Stop();
-	drv.Remove(); 
+	drv.Stop(SERVICE_NAME);
+	drv.Remove(SERVICE_NAME);
 }
