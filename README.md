@@ -14,10 +14,10 @@ VT-x/EPT for User Memory Hiding hiding. Faking Any read memory read operation in
 So that it could be used for bypassing any checksum in user mode memory. 
 
 # Expected Output
- NoTruth can be tested by user mode with Multi-Core Processor Configuration 
+ Let any one reading a faked value. But CPU execution
  
 # User Mode Test:  
-
+NoTruth can be tested by user mode with Multi-Core Processor Configuration 
 For Making a test case simple, we simply used x64dbg + notepad(x64) for demonstration.
 
 Basically, we could use x64dbg to editing the text section of notepad as following and we could compare the result : 
