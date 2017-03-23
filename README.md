@@ -30,24 +30,24 @@ Open a notepad.exe(x64) and VTxRing3.exe with administrator, by clicking on Load
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195373/6aa062d4-0f34-11e7-9819-c7bdbdbe8203.png" width="30%" height="30%"> </img>
 
-After the NoTruth Driver is loaded, do the same things as previous(modifing memory) : 
+After the NoTruth Driver is loaded, do the same things as previous(modifing memory), write a 0xCC on NtCreateFile : 
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195375/6ac79340-0f34-11e7-873f-a725b1e73e5c.png" width="70%" height="70%"> </img>
 
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195376/6ac79796-0f34-11e7-951e-de6758355933.png" width="70%" height="70%"> </img>
 
-We could see, the memory hasn't changed as following :
+We could see, the memory hasn't changed as following from debugger aspect :
  
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195374/6ac552ce-0f34-11e7-810c-620ddce8873e.png" width="70%" height="70%"> </img>
 
  
-We are going to execute that instruction :
+We are going to execute once NtCreateFile by notepad.exe :
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195379/6acbaef8-0f34-11e7-961e-fcd40b613b5b.png" width="70%" height="70%"> </img>
 
  
-It is break on that instruction, but debugging can't notify it is 0xCC (breakpoint instruction)
+It is breaked on that instruction,  but debugging can't realize it is 0xCC (breakpoint instruction) , then the exception comes
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195377/6ac7b4ce-0f34-11e7-91e3-b77f70557e23.png" width="70%" height="70%"> </img>
 
@@ -56,7 +56,7 @@ Finally, close the notepad.exe, release and unlock the memory.
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195378/6acb744c-0f34-11e7-9c21-f2af1914b7a7.png" width="70%" height="70%"> </img>
 
 # TODO:
-Debug...
+Debug... 
 
 # Reference:
  https://github.com/tandasat/HyperPlatform
