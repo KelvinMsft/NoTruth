@@ -130,7 +130,7 @@ _Use_decl_annotations_ static VOID GetPhysicalAddressByNewCR3(
 		oldPA = MmGetPhysicalAddress(va);
 		if (!oldPA.QuadPart)
 		{
-			//KeBugCheckEx(0x22334455, oldPA.QuadPart, (ULONG_PTR)va, (ULONG_PTR)newCR3, (ULONG_PTR)oldCR3);
+			///KeBugCheckEx(0x22334455, oldPA.QuadPart, (ULONG_PTR)va, (ULONG_PTR)newCR3, (ULONG_PTR)oldCR3);
 		}
 		__writecr3(oldCR3);
 	}
@@ -351,14 +351,10 @@ _Use_decl_annotations_ void TruthHandleMonitorTrapFlag(
 {	
 	NT_VERIFY(IsUserModeHideActive(shared_sh_data));
 
-	KeAcquireInStackQueuedSpinLockAtDpcLevel(&shared_sh_data->SpinLock, &shared_sh_data->LockHandle);
-	 
+/// there is a deadlock.
 	const auto info = TruthRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
 	TruthEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
 	TruthSetMonitorTrapFlag(sh_data, false);
-
-	KeReleaseSpinLockFromDpcLevel(&shared_sh_data->SpinLock);
-
 } 
 
 //-------------------------------------------------------------------------------//
@@ -373,11 +369,6 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 	bool IsRead
 )
 { 
-	 KeAcquireInStackQueuedSpinLockAtDpcLevel(
-		&shared_sh_data->SpinLock, 
-		&shared_sh_data->LockHandle
-	); 
-
 	if (!IsUserModeHideActive(shared_sh_data)) 
 	{
 		return false;
@@ -412,8 +403,7 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 		TruthSaveLastHideInfo(sh_data, *info);
 
 	}
-	 
-	KeReleaseSpinLockFromDpcLevel(&shared_sh_data->SpinLock);
+
 	//after return to Guset OS, run a single instruction --> and trap into VMM again
  return true;
 }
@@ -527,7 +517,6 @@ _Use_decl_annotations_ static void TruthSetMonitorTrapFlag(HiddenData* sh_data, 
 //----------------------------------------------------------------------------------------------------------------------
 _Use_decl_annotations_ static void TruthSaveLastHideInfo(HiddenData* sh_data, const HideInformation& info)
 {
-	KLOCK_QUEUE_HANDLE lock_handle = {};
 	NT_ASSERT(!sh_data->UserModeBackup);	
  	sh_data->UserModeBackup = &info; 
 }
@@ -537,7 +526,7 @@ _Use_decl_annotations_ static const HideInformation* TruthRestoreLastHideInfo(
 	_In_ HiddenData* sh_data
 ) 
 {
-	KLOCK_QUEUE_HANDLE lock_handle = {};
+	NT_ASSERT(sh_data->UserModeBackup);
 	const auto info = sh_data->UserModeBackup;
 	sh_data->UserModeBackup = nullptr;
 	return info;

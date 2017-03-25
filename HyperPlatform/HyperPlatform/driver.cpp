@@ -101,8 +101,7 @@ NTSTATUS DispatchNoTruthCore(
 	{
 		case IOCTL_HIDE_ADD: 
 			data = (PTRANSFERIOCTL)InputBuffer;
-			hiddenProc;
-			if (data)
+ 			if (data)
 			{
 				HYPERPLATFORM_LOG_DEBUG("Proc ID: %I64X Address : %I64X", data->ProcID, data->Address);
 				PsLookupProcessByProcessId((HANDLE)data->ProcID, &hiddenProc);

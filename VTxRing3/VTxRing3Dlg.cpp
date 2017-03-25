@@ -259,22 +259,70 @@ BOOL WipeCopyOnWrite(
 #define DRV_PATH		"C:\\NoTruth.sys"
 #define SERVICE_NAME	"NoTruthtest5"
 #define DISPLAY_NAME	SERVICE_NAME
+//----------------------------------------
+void AttackTarget(){
+	OutputDebugString(L"Hidden Exception \r\n");
+}
+
+//----------------------------------------
+PVOID ThreadProc2(PVOID Params)
+{
+  	while (1)
+	{
+		__try {
+			AttackTarget();
+		}
+		__except(1)
+		{
+			OutputDebugString(L"Hidden Exception \r\n");
+		}
+		Sleep(100);
+	}
+	return NULL;
+}
+
+//----------------------------------------
+PVOID ThreadProc(PVOID Params)
+{
+	CHAR* Expected = (CHAR*)AttackTarget;
+	CString		str;
+	while (1)
+	{
+		str.Format(L"Expected: %x \r\n", *(PCHAR)Expected);
+		OutputDebugString(str);
+		Sleep(100);
+	}
+	return NULL;
+}
+
+//----------------------------------------
+void UnitTestAttack()
+{
+	for (int i = 0; i < 3; i++)
+	{
+		CreateThread(0, 0,(LPTHREAD_START_ROUTINE)ThreadProc,0,0,0);
+	}
+	for (int i = 0; i < 3; i++)
+	{
+		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadProc2, 0, 0, 0);
+	}
+}
 void CVTxRing3Dlg::OnBnClickedOk()
 { 
 	ULONG	OutBuffer, RetBytes;
 	TRANSFERIOCTL transferData2 = { 0 };
 	DWORD					pid = (DWORD)FindProcessId(L"notepad.exe");
-	HANDLE				 handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+	HANDLE				 handle = GetCurrentProcess();//OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
  
 
-	PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-	PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
+	//PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
+	//PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
 
 	CString err;
 
-	transferData2.ProcID = pid;
+	transferData2.ProcID = GetCurrentProcessId();//pid;
 	transferData2.HiddenType = 0x0;
-	transferData2.Address = (ULONG64)NtCreateFile;
+	transferData2.Address = (ULONG64)AttackTarget;
 
 
 	//Create Service
@@ -289,7 +337,6 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	if (!drv.Start(SERVICE_NAME))
 	{
 		OutputDebugStringA("Change Page 333Attribute to Writable \r\n");
-
 		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
@@ -331,6 +378,8 @@ void CVTxRing3Dlg::OnBnClickedOk()
  	CloseHandle(handle);
  
 	OutputDebugStringA("Successfully Hide \r\n"); 
+
+	UnitTestAttack();
 }
 
 
