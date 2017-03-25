@@ -382,17 +382,10 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
   }
   else if (static_cast<interruption_type>(exception.fields.interruption_type) == interruption_type::kSoftwareException) {
     // Software exception
-	//?件異常 如#BP 斷?異常
     if (static_cast<InterruptionVector>(exception.fields.vector) ==
         InterruptionVector::kBreakpointException) {
       // #BP
-		/*if (ShHandleBreakpoint(
-				guest_context->stack->processor_data->sh_data,
-				guest_context->stack->processor_data->shared_data->shared_sh_data,
-				reinterpret_cast<void *>(guest_context->ip))) {
-				return;
-		}
-		*/
+
       VmEntryInterruptionInformationField inject = {};
       inject.fields.interruption_type = exception.fields.interruption_type;
       inject.fields.vector = exception.fields.vector;
@@ -400,7 +393,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
       inject.fields.valid = true;
       UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
       UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-      //HYPERPLATFORM_LOG_INFO_SAFE("GuestIp= %p, #BP ", guest_context->ip);
+      HYPERPLATFORM_LOG_INFO_SAFE("GuestIp= %p, #BP ", guest_context->ip);
 
     }
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags){
