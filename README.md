@@ -1,5 +1,5 @@
 # NoTruth
-NoTruth is an Open Source light-weighted for hiding user-mode memory based on VT-x in Windows x64 platform. 
+NoTruth is an Open Source project for hiding a user-mode memory based on VT-x in Windows x64 platform. 
 
 # Environment
 - Visual Studio 2015 update 3 
