@@ -15,6 +15,13 @@ So that it could be used for bypassing any checksum in user mode memory.
 
 # Expected Output
  Let any one reading a faked value. But CPU execution
+ As a reuslt should be expected as following :
+ <img src= https://cloud.githubusercontent.com/assets/22551808/24321665/d6e3d6ba-118c-11e7-8585-ad40f80daf23.png></img>
+
+ Explanation:
+ - There is a test-case in VTxRing3 with a 20 number of threads, 10 for memory reading the memory, 10 for executing the function.
+ 1: Read correct value of that function.
+ 2: In case some on execute on that function, it throw exception, becoz we write a 0xCC on that.
  
 # User Mode Test:  
 NoTruth can be tested by user mode with Multi-Core Processor Configuration 
