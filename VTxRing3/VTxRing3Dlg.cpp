@@ -16,14 +16,25 @@
 #include <winternl.h>
 
 #pragma comment(lib,"ntdll.lib") // Need to link with ntdll.lib import library. You can find the ntdll.lib from the Windows DDK.
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Types
+//
+//
 typedef struct _TRANSFER_IOCTL
 {
 	ULONG64 ProcID;
 	ULONG64 HiddenType;
 	ULONG64 Address;
 }TRANSFERIOCTL, *PTRANSFERIOCTL;
-// CAboutDlg dialog used for App About
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Marco
+//
+//
+#define DRV_PATH		"C:\\NoTruth.sys"
+#define SERVICE_NAME	"NoTruthtest5"
+#define DISPLAY_NAME	SERVICE_NAME
+
 
 class CAboutDlg : public CDialogEx
 {
@@ -256,25 +267,28 @@ BOOL WipeCopyOnWrite(
 	return ret;
 }
 
-#define DRV_PATH		"C:\\NoTruth.sys"
-#define SERVICE_NAME	"NoTruthtest5"
-#define DISPLAY_NAME	SERVICE_NAME
 //----------------------------------------
-void AttackTarget(){
-	OutputDebugString(L"Hidden Exception \r\n");
-}
+void AttackTarget(){}
+
 
 //----------------------------------------
-PVOID ThreadProc2(PVOID Params)
+ULONG DumpExecptionCode(ULONG exception)
 {
-  	while (1)
+	CString		str;
+	str.Format(L"Hidden Exception ( code: 0x%X ) \r\n", exception);
+	OutputDebugString(str);
+
+	return 1;
+}
+//----------------------------------------
+PVOID ExecuteThread(PVOID Params)
+{  	while (1)
 	{
 		__try {
 			AttackTarget();
 		}
-		__except(1)
+		__except(DumpExecptionCode(GetExceptionCode()))
 		{
-			OutputDebugString(L"Hidden Exception \r\n");
 		}
 		Sleep(100);
 	}
@@ -282,13 +296,13 @@ PVOID ThreadProc2(PVOID Params)
 }
 
 //----------------------------------------
-PVOID ThreadProc(PVOID Params)
+PVOID ReadThread(PVOID Params)
 {
-	CHAR* Expected = (CHAR*)AttackTarget;
+	UCHAR* Expected = (UCHAR*)AttackTarget;
 	CString		str;
 	while (1)
 	{
-		str.Format(L"Expected: %x \r\n", *(PCHAR)Expected);
+		str.Format(L"Expected: 0x%X \r\n", *(PUCHAR)Expected);
 		OutputDebugString(str);
 		Sleep(100);
 	}
@@ -298,15 +312,17 @@ PVOID ThreadProc(PVOID Params)
 //----------------------------------------
 void UnitTestAttack()
 {
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < 10; i++)
 	{
-		CreateThread(0, 0,(LPTHREAD_START_ROUTINE)ThreadProc,0,0,0);
+		CreateThread(0, 0,(LPTHREAD_START_ROUTINE)ReadThread,0,0,0);
 	}
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < 10; i++)
 	{
-		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadProc2, 0, 0, 0);
+		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0);
 	}
 }
+
+//----------------------------------------
 void CVTxRing3Dlg::OnBnClickedOk()
 { 
 	ULONG	OutBuffer, RetBytes;
@@ -373,7 +389,12 @@ void CVTxRing3Dlg::OnBnClickedOk()
 		return;
 		AfxMessageBox(L"Cannot IOCTL device \r\n");
 	}
-	 
+	
+	ULONG oldProtect = 0;
+	VirtualProtectEx(handle, (LPVOID)AttackTarget, sizeof(CHAR), PAGE_EXECUTE_WRITECOPY, &oldProtect);
+	*(PCHAR)AttackTarget = 0xCC;
+	VirtualProtectEx(handle, (LPVOID)AttackTarget, sizeof(CHAR), oldProtect, &oldProtect);
+
 
  	CloseHandle(handle);
  
