@@ -16,7 +16,7 @@ So that it could be used for bypassing any checksum in user mode memory.
 # Expected Output
  Let any one reading a faked value. But CPU execution
  As a reuslt should be expected as following :
- <img src= https://cloud.githubusercontent.com/assets/22551808/24321665/d6e3d6ba-118c-11e7-8585-ad40f80daf23.png width="70%" height="70%"></img>
+ <img src= https://cloud.githubusercontent.com/assets/22551808/24321665/d6e3d6ba-118c-11e7-8585-ad40f80daf23.png width="50%" height="50%"></img>
 
  Explanation:
  - There is a test-case in VTxRing3 with a 20 number of threads, 10 for memory reading the memory, 10 for executing the function.
@@ -29,7 +29,7 @@ For Making a test case simple, we simply used x64dbg + notepad(x64) for demonstr
 
 Basically, we could use x64dbg to editing the text section of notepad as following and we could compare the result : 
 
-<img src="https://cloud.githubusercontent.com/assets/22551808/24195359/61737e1c-0f34-11e7-92d6-2022db58695d.png" width="50%" height="50%"> </img>
+<img src="https://cloud.githubusercontent.com/assets/22551808/24195359/61737e1c-0f34-11e7-92d6-2022db58695d.png" width="70%" height="70%"> </img>
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195372/6a76313a-0f34-11e7-8e0d-3832297f69b2.png" width="70%" height="70%"> </img>
  
