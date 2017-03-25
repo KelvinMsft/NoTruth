@@ -29,7 +29,7 @@ For Making a test case simple, we simply used x64dbg + notepad(x64) for demonstr
 
 Basically, we could use x64dbg to editing the text section of notepad as following and we could compare the result : 
 
-<img src="https://cloud.githubusercontent.com/assets/22551808/24195359/61737e1c-0f34-11e7-92d6-2022db58695d.png" width="70%" height="70%"> </img>
+<img src="https://cloud.githubusercontent.com/assets/22551808/24195359/61737e1c-0f34-11e7-92d6-2022db58695d.png" width="50%" height="50%"> </img>
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/24195372/6a76313a-0f34-11e7-8e0d-3832297f69b2.png" width="70%" height="70%"> </img>
  
