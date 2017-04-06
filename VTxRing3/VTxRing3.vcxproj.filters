@@ -39,6 +39,9 @@
     <ClInclude Include="IOCTL.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Hook.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="VTxRing3.cpp">
@@ -51,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="cDrvCtrl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Hook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

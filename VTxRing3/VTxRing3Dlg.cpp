@@ -9,32 +9,38 @@
 #include "cDrvCtrl.h"
 #include "IOCTL.h"	
 #include "tlhelp32.h"
+#include "Hook.h"
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
 #include <winternl.h>
 
+typedef NTSTATUS(*pMyNtCreateThread)(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	OUT PVOID ClientId,
+	IN PCONTEXT ThreadContext,
+	IN PVOID InitialTeb,
+	IN BOOLEAN CreateSuspended);
+
+#define DRV_PATH		"C:\\NoTruth.sys"
+#define SERVICE_NAME	"NoTruthtest5"
+#define DISPLAY_NAME	SERVICE_NAME
+HOOKOBJ* g_HookObj = NULL;
+pMyNtCreateThread g_NtCreateThread = NULL;
 #pragma comment(lib,"ntdll.lib") // Need to link with ntdll.lib import library. You can find the ntdll.lib from the Windows DDK.
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Types
-//
-//
+ 
 typedef struct _TRANSFER_IOCTL
 {
 	ULONG64 ProcID;
 	ULONG64 HiddenType;
 	ULONG64 Address;
 }TRANSFERIOCTL, *PTRANSFERIOCTL;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Marco
-//
-//
-#define DRV_PATH		"C:\\NoTruth.sys"
-#define SERVICE_NAME	"NoTruthtest5"
-#define DISPLAY_NAME	SERVICE_NAME
-
+// CAboutDlg dialog used for App About
 
 class CAboutDlg : public CDialogEx
 {
@@ -177,6 +183,7 @@ HCURSOR CVTxRing3Dlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
 }
+
 DWORD FindProcessId(WCHAR*processname)
 {
 	HANDLE hProcessSnap;
@@ -267,80 +274,101 @@ BOOL WipeCopyOnWrite(
 	return ret;
 }
 
-//----------------------------------------
-void AttackTarget(){}
-
-
-//----------------------------------------
-ULONG DumpExecptionCode(ULONG exception)
+ 
+template <typename T>
+static T  FindOrignal(T handler)
 {
-	CString		str;
-	str.Format(L"Hidden Exception ( code: 0x%X ) \r\n", exception);
-	OutputDebugString(str);
-
-	return 1;
+	return reinterpret_cast<T>(g_HookObj->JmpToOrg);
 }
-//----------------------------------------
-PVOID ExecuteThread(PVOID Params)
-{  	while (1)
+
+extern "C" {
+	//-------------------------------------//
+	ULONG Test1()
 	{
-		__try {
-			AttackTarget();
-		}
-		__except(DumpExecptionCode(GetExceptionCode()))
-		{
-		}
-		Sleep(100);
+		OutputDebugStringA("Test1");
+		return 0;
 	}
-	return NULL;
+	//-------------------------------------//
+
+	ULONG Test2()
+	{
+		OutputDebugStringA("Test2");
+		const auto Original = FindOrignal(Test1);
+		return Original();
+	}
+
+} 
+
+NTSTATUS 
+MyNtCreateThread(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	OUT PVOID ClientId,
+	IN PCONTEXT ThreadContext,
+	IN PVOID InitialTeb,
+	IN BOOLEAN CreateSuspended)
+{
+	CString str; 
+	OutputDebugString(L"Test my thread hook \r\n");
+	const auto Original = FindOrignal(MyNtCreateThread);
+	const auto status = Original(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, ClientId, ThreadContext, InitialTeb, CreateSuspended); 
+	str.Format(L"Status: %x Err: %x \r\n", status, GetLastError());
+	OutputDebugString(str); 
+	return status;
 }
 
-//----------------------------------------
-PVOID ReadThread(PVOID Params)
+DWORD WINAPI ExecuteThread(PVOID Param)
 {
-	UCHAR* Expected = (UCHAR*)AttackTarget;
-	CString		str;
+	CString str;
+	ULONG  Hash;
 	while (1)
 	{
-		str.Format(L"Expected: 0x%X \r\n", *(PUCHAR)Expected);
+		ULONG value = 0;
+		value = g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);;
+		str.Format(L"Return Value : %x \r\n", value);
 		OutputDebugString(str);
-		Sleep(100);
+		Sleep(1000);
 	}
-	return NULL;
+	return 0;
 }
-
-//----------------------------------------
-void UnitTestAttack()
+DWORD WINAPI CheckSumThread(PVOID Param)
 {
-	for (int i = 0; i < 10; i++)
+	CString str; 
+	ULONG  Hash;
+ 
+	while (1)
 	{
-		CreateThread(0, 0,(LPTHREAD_START_ROUTINE)ReadThread,0,0,0);
+		ULONG value = 0;
+		value = *(PULONG)g_NtCreateThread;
+		str.Format(L"value: %x \r\n", value); 
+		OutputDebugString(str);
+		Sleep(1000);
 	}
-	for (int i = 0; i < 10; i++)
-	{
-		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0);
-	}
+	return 0;
 }
-
-//----------------------------------------
+ 
+//-------------------------------------//
 void CVTxRing3Dlg::OnBnClickedOk()
 { 
-	ULONG	OutBuffer, RetBytes;
+	ULONG OutBuffer, RetBytes = 0;
 	TRANSFERIOCTL transferData2 = { 0 };
-	DWORD					pid = (DWORD)FindProcessId(L"notepad.exe");
-	HANDLE				 handle = GetCurrentProcess();//OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+	DWORD					pid = (DWORD)GetCurrentProcessId();
+	HANDLE				 handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
  
 
-	//PVOID NtCreateThread = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-	//PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
+	g_NtCreateThread = (pMyNtCreateThread)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
+
+
+	PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
 
 	CString err;
 
-	transferData2.ProcID = GetCurrentProcessId();//pid;
+	transferData2.ProcID = GetCurrentProcessId();
 	transferData2.HiddenType = 0x0;
-	transferData2.Address = (ULONG64)AttackTarget;
-
-
+	transferData2.Address = (ULONG64)g_NtCreateThread;
+	 
 	//Create Service
 	if (!drv.Install(DRV_PATH, SERVICE_NAME, DISPLAY_NAME))
 	{
@@ -353,6 +381,7 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	if (!drv.Start(SERVICE_NAME))
 	{
 		OutputDebugStringA("Change Page 333Attribute to Writable \r\n");
+
 		drv.Remove(SERVICE_NAME);
 		CloseHandle(handle);
 		return;
@@ -389,18 +418,23 @@ void CVTxRing3Dlg::OnBnClickedOk()
 		return;
 		AfxMessageBox(L"Cannot IOCTL device \r\n");
 	}
-	
-	ULONG oldProtect = 0;
-	VirtualProtectEx(handle, (LPVOID)AttackTarget, sizeof(CHAR), PAGE_EXECUTE_WRITECOPY, &oldProtect);
-	*(PCHAR)AttackTarget = 0xCC;
-	VirtualProtectEx(handle, (LPVOID)AttackTarget, sizeof(CHAR), oldProtect, &oldProtect);
-
-
+	 
  	CloseHandle(handle);
- 
-	OutputDebugStringA("Successfully Hide \r\n"); 
 
-	UnitTestAttack();
+	CString str;
+	ULONG value = 0;
+	value = *(PULONG)g_NtCreateThread;
+	str.Format(L"value: %x \r\n", value);
+	OutputDebugString(str);
+  
+	SetupInlineHook_X64(&g_HookObj, g_NtCreateThread, MyNtCreateThread);
+	 
+	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)CheckSumThread, 0, 0, 0);
+	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0); 
+
+	OutputDebugStringA("Successfully Hide \r\n"); 
+	 
+
 }
 
 

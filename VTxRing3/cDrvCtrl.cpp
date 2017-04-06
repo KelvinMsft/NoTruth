@@ -9,10 +9,8 @@ Drvier Control Class (SCM way)
 
 #define LOG_LAST_ERROR()	\
 	CString err;		\
-	err.Format(L"Line: %d Err: %d \r\n",   __LINE__, GetLastError());	\
+	err.Format(L"Func: %s Line: %d Err: %d \r\n", __FUNCTION__ , __LINE__, GetLastError());	\
 	OutputDebugString(err); \
-
-
 //--------------------------------------------------------------------------------//
 BOOL WINAPI InstallService(
 	_In_ LPCSTR ServiceName,
