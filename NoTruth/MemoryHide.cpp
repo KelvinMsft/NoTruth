@@ -64,6 +64,9 @@ struct HiddenData {
 static HideInformation* TruthFindHideInfoByPhyAddr(
 	const ShareDataContainer* shared_sh_data, ULONG64 fault_pa);
  
+_Use_decl_annotations_ static void TruthEnableEntryForReadAndExec(const HideInformation& info, EptData* ept_data);
+
+
 //Come from Reading, independent page
 static void TruthEnableEntryForExecuteOnly(_In_ const HideInformation& info, _In_ EptData* ept_data);
 
@@ -355,8 +358,9 @@ _Use_decl_annotations_ void TruthHandleMonitorTrapFlag(
 	const auto info = TruthRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
 	TruthEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
 	TruthSetMonitorTrapFlag(sh_data, false);
-} 
 
+ } 
+#define ComparePage(x,y)  (PAGE_ALIGN(x) == PAGE_ALIGN(y))
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ bool TruthHandleEptViolation(
 	HiddenData* sh_data,  
@@ -386,14 +390,20 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 	if (IsRead)
 	{
 		TruthEnableEntryForReadOnly(*info, ept_data);
+		if(ComparePage(UtilVmRead(VmcsField::kGuestRip), fault_va))
+		{
+			TruthEnableEntryForReadAndExec(*info, ept_data);	
+		}
 		//Set MTF flags 
 		TruthSetMonitorTrapFlag(sh_data, true);
 		//used for reset read-only
 		TruthSaveLastHideInfo(sh_data, *info);
-	}
+
+		HYPERPLATFORM_LOG_DEBUG("Read.. fault_va: %I64X  GuestRIP: %I64X \r\n", fault_va, UtilVmRead(VmcsField::kGuestRip));
+ 	}
 
 	//Write,Execute in same page
-	if (IsWrite)
+	else if (IsWrite)
 	{		
 		//Set R/W/!X for RING3/ RING0
 		TruthEnableEntryForAll(*info, ept_data);
@@ -401,11 +411,15 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 		TruthSetMonitorTrapFlag(sh_data, true);
 		//used for reset read-only
 		TruthSaveLastHideInfo(sh_data, *info);
-
+	}
+	else if (IsExecute)
+	{
+		TruthEnableEntryForExecuteOnly(*info, ept_data);
+		HYPERPLATFORM_LOG_DEBUG("Exec.. fault_va: %I64X  GuestRIP: %I64X \r\n",fault_va, UtilVmRead(VmcsField::kGuestRip));
 	}
 
 	//after return to Guset OS, run a single instruction --> and trap into VMM again
- return true;
+	return true;
 }
 
 //-------------------------------------------------------------------------------//
@@ -492,6 +506,15 @@ _Use_decl_annotations_ static void TruthEnableEntryForReadOnly(const HideInforma
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_rw, TRUE, FALSE, FALSE);
+	UtilInveptAll();
+}
+//----------------------------------------------------------------------------------------------------------------------
+_Use_decl_annotations_ static void TruthEnableEntryForReadAndExec(const HideInformation& info, EptData* ept_data)
+{
+
+	ULONG64 newPA = 0;
+	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
+	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_exec, TRUE, FALSE, TRUE);
 	UtilInveptAll();
 }
 //----------------------------------------------------------------------------------------------------------------------

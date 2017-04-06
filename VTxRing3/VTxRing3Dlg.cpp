@@ -319,16 +319,36 @@ MyNtCreateThread(
 	return status;
 }
 
+//----------------------------------------------//
+ULONG DumpExecptionCode(ULONG exception)
+{
+	CString		str;
+	str.Format(L"Hidden Exception ( code: 0x%X ) \r\n", exception);
+	OutputDebugString(str);
+
+	return 1;
+}
+
+
+//----------------------------------------------//
 DWORD WINAPI ExecuteThread(PVOID Param)
 {
-	CString str;
 	ULONG  Hash;
 	while (1)
 	{
+		/*
 		ULONG value = 0;
 		value = g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);;
 		str.Format(L"Return Value : %x \r\n", value);
 		OutputDebugString(str);
+		*/
+		__try {
+			g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);
+		}
+		__except (DumpExecptionCode(GetExceptionCode()))
+		{
+
+		}
 		Sleep(1000);
 	}
 	return 0;
@@ -348,7 +368,7 @@ DWORD WINAPI CheckSumThread(PVOID Param)
 	}
 	return 0;
 }
- 
+
 //-------------------------------------//
 void CVTxRing3Dlg::OnBnClickedOk()
 { 
@@ -368,7 +388,7 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	transferData2.ProcID = GetCurrentProcessId();
 	transferData2.HiddenType = 0x0;
 	transferData2.Address = (ULONG64)g_NtCreateThread;
-	 
+	
 	//Create Service
 	if (!drv.Install(DRV_PATH, SERVICE_NAME, DISPLAY_NAME))
 	{
@@ -419,6 +439,7 @@ void CVTxRing3Dlg::OnBnClickedOk()
 		AfxMessageBox(L"Cannot IOCTL device \r\n");
 	}
 	 
+
  	CloseHandle(handle);
 
 	CString str;
@@ -428,7 +449,8 @@ void CVTxRing3Dlg::OnBnClickedOk()
 	OutputDebugString(str);
   
 	SetupInlineHook_X64(&g_HookObj, g_NtCreateThread, MyNtCreateThread);
-	 
+			
+	//g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);
 	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)CheckSumThread, 0, 0, 0);
 	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0); 
 

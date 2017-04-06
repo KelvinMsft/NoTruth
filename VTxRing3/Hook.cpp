@@ -137,8 +137,9 @@ BOOLEAN SetupInlineHook_X64(
 	// Set hook
 	trampolineCode = MakeTrampolineCode(HookHandler);
  
+//	CHAR breakpoint = 0xCC;
 	RtlCopyMemory(HookAddress, &trampolineCode, InstSize);
-
+//	RtlCopyMemory(HookAddress, &breakpoint , InstSize);
 
 	if (InstSize > 15)
 	{
