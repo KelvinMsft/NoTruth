@@ -387,16 +387,15 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 	//Read in single page
 	if (IsRead)
 	{
-		TruthEnableEntryForReadOnly(*info, ept_data);
-		if(ComparePage(UtilVmRead(VmcsField::kGuestRip), fault_va))
+		TruthEnableEntryForReadOnly(*info, ept_data); 
+	
+		if (!ComparePage(UtilVmRead(VmcsField::kGuestRip), fault_va))
 		{
-			TruthEnableEntryForReadAndExec(*info, ept_data);	
+			//Set MTF flags 
+			TruthSetMonitorTrapFlag(true);
+			//used for reset read-only
+			TruthSaveLastHideInfo(sh_data, *info);
 		}
-		//Set MTF flags 
-		TruthSetMonitorTrapFlag(true);
-		//used for reset read-only
-		TruthSaveLastHideInfo(sh_data, *info);
-
 		HYPERPLATFORM_LOG_DEBUG("Read.. fault_va: %I64X  GuestRIP: %I64X \r\n", fault_va, UtilVmRead(VmcsField::kGuestRip));
  	}
 
@@ -412,7 +411,12 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 	}
 	else if (IsExecute)
 	{
-		TruthEnableEntryForExecuteOnly(*info, ept_data);
+		TruthEnableEntryForReadAndExec(*info, ept_data);
+		//Set MTF flags 
+		TruthSetMonitorTrapFlag(true);
+		//used for reset read-only
+		TruthSaveLastHideInfo(sh_data, *info);
+
 		HYPERPLATFORM_LOG_DEBUG("Exec.. fault_va: %I64X  GuestRIP: %I64X \r\n",fault_va, UtilVmRead(VmcsField::kGuestRip));
 	}
 
