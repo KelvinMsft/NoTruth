@@ -1,0 +1,4 @@
+EXPORTS  
+   UnitTest   @1   
+   SetupInlineHook_X64 @2
+   HelloWorld @3

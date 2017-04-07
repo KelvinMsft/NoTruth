@@ -10,12 +10,34 @@
 #include "IOCTL.h"	
 #include "tlhelp32.h"
 #include "Hook.h"
+#include <vector>
+#include <algorithm>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
 #include <winternl.h>
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Namespace
+//////
+////// 
+
+using namespace std;
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Type
+//////
+////// 
+typedef struct _TRANSFER_IOCTL
+{
+	ULONG64 ProcID;
+	ULONG64 HiddenType;
+	ULONG64 Address;
+}TRANSFERIOCTL, *PTRANSFERIOCTL;
+
 
 typedef NTSTATUS(*pMyNtCreateThread)(
 	OUT PHANDLE ThreadHandle,
@@ -27,21 +49,39 @@ typedef NTSTATUS(*pMyNtCreateThread)(
 	IN PVOID InitialTeb,
 	IN BOOLEAN CreateSuspended);
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Prototype
+//////
+//////  
+
+ 
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Marco and Utilities
+//////
+////// 
 #define DRV_PATH		"C:\\NoTruth.sys"
 #define SERVICE_NAME	"NoTruthtest5"
-#define DISPLAY_NAME	SERVICE_NAME
-HOOKOBJ* g_HookObj = NULL;
-pMyNtCreateThread g_NtCreateThread = NULL;
-#pragma comment(lib,"ntdll.lib") // Need to link with ntdll.lib import library. You can find the ntdll.lib from the Windows DDK.
- 
-typedef struct _TRANSFER_IOCTL
-{
-	ULONG64 ProcID;
-	ULONG64 HiddenType;
-	ULONG64 Address;
-}TRANSFERIOCTL, *PTRANSFERIOCTL;
-// CAboutDlg dialog used for App About
+#define DISPLAY_NAME	SERVICE_NAME 
+#define PAGE_SIZE 0x1000
+#define PAGE_ALIGN(Va) ((PVOID)((ULONG_PTR)(Va) & ~(PAGE_SIZE - 1)))
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Global variable
+//////
+////// 
+
+HOOKOBJ*		  g_HookObj = NULL;
+pMyNtCreateThread g_NtCreateThread = NULL; 
+vector<PVOID>	  g_PageBaseVector;
+ 
+  
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////// Implemenetation
+//////
+////// 
+
+// CAboutDlg dialog used for App About
 class CAboutDlg : public CDialogEx
 {
 public:
@@ -179,11 +219,14 @@ void CVTxRing3Dlg::OnPaint()
 
 // The system calls this function to obtain the cursor to display while the user drags
 //  the minimized window.
+//--------------------------------------------------------------------------------------------//
 HCURSOR CVTxRing3Dlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+
+//--------------------------------------------------------------------------------------------//
 DWORD FindProcessId(WCHAR*processname)
 {
 	HANDLE hProcessSnap;
@@ -274,31 +317,14 @@ BOOL WipeCopyOnWrite(
 	return ret;
 }
 
- 
+//--------------------------------------------------------------------------------------------// 
 template <typename T>
-static T  FindOrignal(T handler)
+static T  FindOrignal(T handler , HOOKOBJ* g_HookObj)
 {
 	return reinterpret_cast<T>(g_HookObj->JmpToOrg);
 }
 
-extern "C" {
-	//-------------------------------------//
-	ULONG Test1()
-	{
-		OutputDebugStringA("Test1");
-		return 0;
-	}
-	//-------------------------------------//
-
-	ULONG Test2()
-	{
-		OutputDebugStringA("Test2");
-		const auto Original = FindOrignal(Test1);
-		return Original();
-	}
-
-} 
-
+//--------------------------------------------------------------------------------------------//
 NTSTATUS 
 MyNtCreateThread(
 	OUT PHANDLE ThreadHandle,
@@ -312,10 +338,23 @@ MyNtCreateThread(
 {
 	CString str; 
 	OutputDebugString(L"Test my thread hook \r\n");
-	const auto Original = FindOrignal(MyNtCreateThread);
-	const auto status = Original(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, ClientId, ThreadContext, InitialTeb, CreateSuspended); 
+
+	const auto Original = FindOrignal(MyNtCreateThread, g_HookObj);
+
+	const auto status = Original(
+		ThreadHandle, 
+		DesiredAccess, 
+		ObjectAttributes,
+		ProcessHandle,
+		ClientId,
+		ThreadContext, 
+		InitialTeb, 
+		CreateSuspended
+	); 
+
 	str.Format(L"Status: %x Err: %x \r\n", status, GetLastError());
 	OutputDebugString(str); 
+
 	return status;
 }
 
@@ -335,13 +374,7 @@ DWORD WINAPI ExecuteThread(PVOID Param)
 {
 	ULONG  Hash;
 	while (1)
-	{
-		/*
-		ULONG value = 0;
-		value = g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);;
-		str.Format(L"Return Value : %x \r\n", value);
-		OutputDebugString(str);
-		*/
+	{ 
 		__try {
 			g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);
 		}
@@ -353,6 +386,7 @@ DWORD WINAPI ExecuteThread(PVOID Param)
 	}
 	return 0;
 }
+//----------------------------------------------//
 DWORD WINAPI CheckSumThread(PVOID Param)
 {
 	CString str; 
@@ -368,98 +402,131 @@ DWORD WINAPI CheckSumThread(PVOID Param)
 	}
 	return 0;
 }
+//--------------------------------------------------------------------------------------------//
+BOOLEAN InitHiddenSystem()
+{
 
-//-------------------------------------//
-void CVTxRing3Dlg::OnBnClickedOk()
-{ 
-	ULONG OutBuffer, RetBytes = 0;
-	TRANSFERIOCTL transferData2 = { 0 };
-	DWORD					pid = (DWORD)GetCurrentProcessId();
-	HANDLE				 handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
- 
-
-	g_NtCreateThread = (pMyNtCreateThread)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread");
-
-
-	PVOID NtCreateFile   = (PVOID)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateFile");
-
-	CString err;
-
-	transferData2.ProcID = GetCurrentProcessId();
-	transferData2.HiddenType = 0x0;
-	transferData2.Address = (ULONG64)g_NtCreateThread;
-	
 	//Create Service
 	if (!drv.Install(DRV_PATH, SERVICE_NAME, DISPLAY_NAME))
 	{
-		OutputDebugStringA("Change Page A222\r\n");
-		CloseHandle(handle);
-		return;
-	} 
+		OutputDebugStringA("Change Page A222\r\n"); 
+	}
 
 	//Start Service
 	if (!drv.Start(SERVICE_NAME))
 	{
 		OutputDebugStringA("Change Page 333Attribute to Writable \r\n");
-
 		drv.Remove(SERVICE_NAME);
-		CloseHandle(handle);
-		return;
-	}
-  
-	OutputDebugStringA("Change Page Attribute to Writable \r\n");
- 
-	if (!WipeCopyOnWrite(handle, transferData2))
-	{
-		drv.Stop(SERVICE_NAME);
-		drv.Remove(SERVICE_NAME);
-		CloseHandle(handle);
-		return;
-	}
-	
-	OutputDebugStringA("Wiped Copy-On-Write \r\n"); 
-	OutputDebugStringA("Change Page Attribute to Original \r\n");
+		return FALSE;
+	}	 
 
-
-	if (!drv.IoControl("\\\\.\\NoTruth",IOCTL_HIDE_ADD, &transferData2, sizeof(TRANSFERIOCTL), &OutBuffer, sizeof(ULONG), &RetBytes))
-	{
-		drv.Stop(SERVICE_NAME);
-		drv.Remove(SERVICE_NAME);
-		CloseHandle(handle);
-		return;
-		AfxMessageBox(L"Cannot IOCTL device \r\n");
-	}
-
-	if (!drv.IoControl("\\\\.\\NoTruth",IOCTL_HIDE_START, NULL, 0, NULL, 0, &RetBytes))
-	{
-		drv.Stop(SERVICE_NAME);
-		drv.Remove(SERVICE_NAME);
-		CloseHandle(handle);
-		return;
-		AfxMessageBox(L"Cannot IOCTL device \r\n");
-	}
-	 
-
- 	CloseHandle(handle);
-
-	CString str;
-	ULONG value = 0;
-	value = *(PULONG)g_NtCreateThread;
-	str.Format(L"value: %x \r\n", value);
-	OutputDebugString(str);
-  
-	SetupInlineHook_X64(&g_HookObj, g_NtCreateThread, MyNtCreateThread);
-			
-	//g_NtCreateThread(0, 0, 0, 0, 0, 0, 0, 0);
-	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)CheckSumThread, 0, 0, 0);
-	CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0); 
-
-	OutputDebugStringA("Successfully Hide \r\n"); 
-	 
-
+	return TRUE; 
 }
 
+//--------------------------------------------------------------------------------------------//
+BOOLEAN StartHiddenSystem()
+{
+	ULONG RetBytes;
 
+	//Start Hidden system to driver , hypercall.
+	if (!drv.IoControl("\\\\.\\NoTruth", IOCTL_HIDE_START, NULL, 0, NULL, 0, &RetBytes))
+	{
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
+		AfxMessageBox(L"Cannot IOCTL device \r\n");
+		return FALSE;
+	}
+	return TRUE;
+}
+//--------------------------------------------------------------------------------------------//
+BOOLEAN AddNodeToHiddenSystem(ULONG64 HookAddress)
+{
+	ULONG					RetBytes = 0;
+	TRANSFERIOCTL	   transferData2 = 
+	{ 
+		GetCurrentProcessId() ,
+		0 , 
+		(ULONG64)HookAddress
+	};
+
+	//if hidden same page already..
+	const auto found = std::find_if(g_PageBaseVector.cbegin(), g_PageBaseVector.cend(), [HookAddress](const auto& info) {
+		return PAGE_ALIGN(info) == PAGE_ALIGN(HookAddress);
+	});
+
+	if (found != g_PageBaseVector.cend())
+	{
+		OutputDebugStringA("Already Hidden this page \r\n"); 
+		return TRUE;
+	} 
+
+	//Wipe the COW
+	if (!WipeCopyOnWrite(GetCurrentProcess(), transferData2))
+	{
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
+		OutputDebugStringA("Wiped Copy-On-Write Failed \r\n"); 
+		return FALSE;
+	}
+
+	// Add a new hidden node into kernel, each page per node.
+	if (!drv.IoControl("\\\\.\\NoTruth", IOCTL_HIDE_ADD, &transferData2, sizeof(TRANSFERIOCTL), NULL, 0, &RetBytes))
+	{
+		drv.Stop(SERVICE_NAME);
+		drv.Remove(SERVICE_NAME);
+		OutputDebugStringA("IOCTL_HIDE_ADD Failed \r\n"); 
+		return FALSE;
+	}
+
+	g_PageBaseVector.push_back(PAGE_ALIGN(transferData2.Address));
+
+	return TRUE;
+} 
+void __stdcall HelloWorld()
+{
+	printf("InitHiddenSystem Failed \r\n");
+}
+//--------------------------------------------------------------------------------------------//
+EXTERN_C void __stdcall UnitTest(PVOID HookAddress, PVOID ProxyFunction)
+{     
+	if (!InitHiddenSystem())
+	{
+		OutputDebugStringA("InitHiddenSystem Failed \r\n"); 
+		return;
+	} 
+
+	if (!AddNodeToHiddenSystem((ULONG64)HookAddress))
+	{
+		OutputDebugStringA("AddNodeToHiddenSystem Failed \r\n"); 
+		return;
+	} 
+
+	if (!StartHiddenSystem())
+	{
+		OutputDebugStringA("StartHiddenSystem Failed \r\n"); 
+		return; 
+	}
+ 
+	OutputDebugStringA("Successfully Hide \r\n");
+}
+
+//-------------------------------------------------------------------------------------------------------//
+void CVTxRing3Dlg::OnBnClickedOk()
+{  
+	g_NtCreateThread = (pMyNtCreateThread)GetProcAddress(LoadLibraryA("ntdll.dll"), "NtCreateThread"); 
+
+	UnitTest(g_NtCreateThread, MyNtCreateThread);
+
+	SetupInlineHook_X64(&g_HookObj, g_NtCreateThread, MyNtCreateThread);
+
+	for (int i = 0; i < 10; i++)
+	{
+		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)CheckSumThread, 0, 0, 0);
+		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ExecuteThread, 0, 0, 0);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------------//
 void CVTxRing3Dlg::OnBnClickedCancel()
 {
 	CDialog::OnCancel(); 
@@ -467,7 +534,7 @@ void CVTxRing3Dlg::OnBnClickedCancel()
 	drv.Remove(SERVICE_NAME);
 }
 
-
+//-------------------------------------------------------------------------------------------------------//
 void CVTxRing3Dlg::OnBnClickedButton1()
 {
 }

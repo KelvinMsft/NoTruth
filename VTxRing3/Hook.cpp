@@ -88,7 +88,9 @@ EXTERN_C
 
 //------------------------------------------//
 EXTERN_C
-BOOLEAN SetupInlineHook_X64(
+BOOLEAN 
+__stdcall
+SetupInlineHook_X64(
 	_Inout_ PHOOKOBJ* HookObject,
 	_In_ PVOID HookAddress,
 	_In_ PVOID HookHandler)
