@@ -39,10 +39,6 @@ extern ShareDataContainer* sharedata;
 // types
 //
 // A helper type for parsing a PoolTag value
-union PoolTag {
-  ULONG value;
-  UCHAR chars[4];
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +50,10 @@ union PoolTag {
 //
 // prototypes
 //
+
+extern "C" {
+	PCHAR PsGetProcessImageFileName(PEPROCESS);
+}
 
 #if defined(ALLOC_PRAGMA)
 #pragma alloc_text(INIT, NoTruthInitialization)
@@ -97,17 +97,13 @@ void UnLockMemory(
 	PMDLX mdl
 )
 {
-	// Attach to process to ensure virtual addresses are correct 
 	// Unlock & free MDL and corresponding pages
 	MmUnlockPages(mdl);
 	IoFreeMdl(mdl); 
 	HYPERPLATFORM_LOG_INFO("Unlocked Memory \r\n"); 
 }
 
-
-extern "C" { 
-	 PCHAR PsGetProcessImageFileName(PEPROCESS);
-}
+ 
 //--------------------------------------------------------------------------------------//
 NTSTATUS AddMemoryHide(PEPROCESS proc, ULONG64 Address) {
 	

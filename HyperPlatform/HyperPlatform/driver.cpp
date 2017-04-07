@@ -100,9 +100,10 @@ NTSTATUS DispatchNoTruthCore(
 	UNREFERENCED_PARAMETER(pIoStatus);
 
 
-	PEPROCESS  hiddenProc;
-	PTRANSFERIOCTL data;
-	NTSTATUS	 status = STATUS_UNSUCCESSFUL;  
+	PEPROCESS		  hiddenProc = NULL;
+	PTRANSFERIOCTL	  data		 = NULL;
+	NTSTATUS		  status	 = STATUS_UNSUCCESSFUL;  
+
 	switch (IoControlCode)
 	{
 		case IOCTL_HIDE_ADD: 

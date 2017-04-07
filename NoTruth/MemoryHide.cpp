@@ -31,6 +31,8 @@
 // constants and macros
 //
 
+#define ComparePage(x,y)  (PAGE_ALIGN(x) == PAGE_ALIGN(y))
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // types
@@ -46,9 +48,7 @@ struct Page {
 
 // Data structure shared across all processors
 struct ShareDataContainer {
-  std::vector<std::unique_ptr<HideInformation>> UserModeList; //var hide
-  KSPIN_LOCK		  SpinLock;
-  KLOCK_QUEUE_HANDLE LockHandle;
+  std::vector<std::unique_ptr<HideInformation>> UserModeList; //var hide 
 };
 
 // Data structure for each processor
@@ -246,8 +246,7 @@ _Use_decl_annotations_ void TruthEnableAllMemoryHide(
 	EptData* ept_data, 
 	ShareDataContainer* shared_data
 )
-{
-	KeInitializeSpinLock(&shared_data->SpinLock);
+{ 
 	for (auto& info : shared_data->UserModeList)
 	{  
 		TruthEnableEntryForExecuteOnly(*info, ept_data);
@@ -357,8 +356,7 @@ _Use_decl_annotations_ void TruthHandleMonitorTrapFlag(
 	TruthEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
 	TruthSetMonitorTrapFlag(false);
 
- } 
-#define ComparePage(x,y)  (PAGE_ALIGN(x) == PAGE_ALIGN(y))
+ }  
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ bool TruthHandleEptViolation(
 	HiddenData* sh_data,  
@@ -410,7 +408,17 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 		TruthSaveLastHideInfo(sh_data, *info);
 	}
 	else if (IsExecute)
-	{
+	{	
+		//Insteresting notes: 
+		//Execute violation is only come from one case, such as,
+		//	 0x1234 ---- mov eax, [0x1234]
+		//	 1. trapped by EPT Read violation
+		//	 2. Set Read-only
+		//	 3. EPT set a MTF and back to guest, VMM expected guest will successfully execute the instruction.
+		//	 4. MTF try to executes the instruction, ept execute violation occurs, MTF pending...
+		//	 5. After VMM handles execute exeception , set Execute-Only again, 
+		//	 6. Re-execute the instruction, CPU will read once again now, it cause for-ever loop.
+
 		TruthEnableEntryForReadAndExec(*info, ept_data);
 		//Set MTF flags 
 		TruthSetMonitorTrapFlag(true);
