@@ -94,6 +94,12 @@ NTSTATUS DispatchNoTruthCore(
 			IN ULONG IoControlCode,
 			IN PIO_STATUS_BLOCK pIoStatus)
 {
+	UNREFERENCED_PARAMETER(InputBufferLength);
+	UNREFERENCED_PARAMETER(OutputBufferLength);
+	UNREFERENCED_PARAMETER(OutputBuffer);
+	UNREFERENCED_PARAMETER(pIoStatus);
+
+
 	PEPROCESS  hiddenProc;
 	PTRANSFERIOCTL data;
 	NTSTATUS	 status = STATUS_UNSUCCESSFUL;  
@@ -319,8 +325,7 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
   UNREFERENCED_PARAMETER(driver_object);
   PAGED_CODE();
 
-  HYPERPLATFORM_COMMON_DBG_BREAK();
-  UNICODE_STRING		ntDeviceName;
+  HYPERPLATFORM_COMMON_DBG_BREAK(); 
   UNICODE_STRING		dosDeviceName;
   RtlInitUnicodeString(&dosDeviceName, NO_TRUTH_DOS_DEVICE_NAME_W);
   driver_object->DeviceObject = deviceObject;

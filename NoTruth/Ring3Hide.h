@@ -56,14 +56,7 @@ struct HideInformation {
 class VariableHiding
 {
 public:
-	struct {
-		void *address;
-		ULONG_PTR set_value;
-		string hookName;
-		ULONG bytes;
-		bool bcopy;
-	};
-	
+ 
 	//unique_ptr cannot use with extern type !!!
 	std::unique_ptr<HideInformation> CreateNoTruthNode(
 		PVOID address, 
@@ -72,15 +65,11 @@ public:
 		PVOID64 mdl,
 		PEPROCESS proc, 
 		ULONG64 physicalAddress);
-	
-	VOID set_global_array(ShareDataContainer* data) {
-		this->data = data;
-	}
+	 
 	_Use_decl_annotations_ static HookInformation* FindPatchInfoByAddress(
 		const ShareDataContainer* shared_sh_data,
 		void* address);
-private:
-	ShareDataContainer* data;	
+private: 
 public:
 	VariableHiding();
 	~VariableHiding();

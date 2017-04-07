@@ -88,8 +88,7 @@ static const HideInformation* TruthRestoreLastHideInfo(_In_ HiddenData* sh_data)
 static void TruthDisableVarHiding(_In_ const HideInformation& info,
 								_In_ EptData* ept_data);
 
-static void TruthSetMonitorTrapFlag(_In_ HiddenData* sh_data,
-                                  _In_ bool enable);
+static void TruthSetMonitorTrapFlag(_In_ bool enable);
 
 static void TruthSaveLastHideInfo(_In_ HiddenData* sh_data,
 								_In_ const HideInformation& info); 
@@ -183,11 +182,11 @@ _Use_decl_annotations_ EXTERN_C ShareDataContainer* TruthAllocateSharedDataConta
 
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ EXTERN_C void TruthFreeSharedHiddenData(
-    ShareDataContainer* shared_sh_data
+    ShareDataContainer* shared_data
 ) 
 {
   PAGED_CODE();
-  delete shared_sh_data;
+  delete shared_data;
 }
 
 
@@ -243,14 +242,13 @@ _Use_decl_annotations_ EXTERN_C NTSTATUS TruthDisableHideByProcess(PEPROCESS pro
 } 
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void TruthEnableAllMemoryHide(
-	HiddenData *data,	
+_Use_decl_annotations_ void TruthEnableAllMemoryHide( 
 	EptData* ept_data, 
-	ShareDataContainer* shared_sh_data
+	ShareDataContainer* shared_data
 )
 {
-	KeInitializeSpinLock(&shared_sh_data->SpinLock);
-	for (auto& info : shared_sh_data->UserModeList)
+	KeInitializeSpinLock(&shared_data->SpinLock);
+	for (auto& info : shared_data->UserModeList)
 	{  
 		TruthEnableEntryForExecuteOnly(*info, ept_data);
 	} 
@@ -259,10 +257,10 @@ _Use_decl_annotations_ void TruthEnableAllMemoryHide(
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ void TruthDisableAllMemoryHide(
 	_In_ EptData* ept_data, 
-	_In_ ShareDataContainer* shared_sh_data
+	_In_ ShareDataContainer* shared_data
 )
 {
-	for (auto& info : shared_sh_data->UserModeList) 
+	for (auto& info : shared_data->UserModeList)
 	{
 		TruthDisableVarHiding(*info, ept_data);
 	}
@@ -271,11 +269,11 @@ _Use_decl_annotations_ void TruthDisableAllMemoryHide(
 //------------------------------------------------------------------------//
 _Use_decl_annotations_ void TruthDisableSingleMemoryHide(
 	_In_ EptData* ept_data, 
-	_In_ ShareDataContainer* shared_sh_data,
+	_In_ ShareDataContainer* shared_data,
 	_In_ PEPROCESS proc
 ) 
 {  
-	for (auto& info : shared_sh_data->UserModeList)
+	for (auto& info : shared_data->UserModeList)
 	{
 		if (info->proc == proc)
 		{
@@ -287,61 +285,61 @@ _Use_decl_annotations_ void TruthDisableSingleMemoryHide(
 }
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void TruthRemoveAllHideNode(
-	_In_ EptData* ept_data,
-	_In_ ShareDataContainer* shared_sh_data
+_Use_decl_annotations_ void TruthRemoveAllHideNode( 
+	_In_ ShareDataContainer* shared_data
 )
 {
-	HYPERPLATFORM_LOG_ERROR("All - ListSize: %d", shared_sh_data->UserModeList.size());
+	HYPERPLATFORM_LOG_ERROR("All - ListSize: %d", shared_data->UserModeList.size());
 
-	for (auto& info : shared_sh_data->UserModeList)
+	for (auto& info : shared_data->UserModeList)
 	{ 
-			shared_sh_data->UserModeList.erase(
+		shared_data->UserModeList.erase(
 				std::remove(
-					shared_sh_data->UserModeList.begin(),
-					shared_sh_data->UserModeList.end(),
+					shared_data->UserModeList.begin(),
+					shared_data->UserModeList.end(),
 					info
 				),
-				shared_sh_data->UserModeList.end()
+			shared_data->UserModeList.end()
 			); 
 	} 
 
-	HYPERPLATFORM_LOG_ERROR("All - ListSize: %d", shared_sh_data->UserModeList.size());
+	HYPERPLATFORM_LOG_ERROR("All - ListSize: %d", shared_data->UserModeList.size());
 }
 
 //--------------------------------------------------------------------------//
-_Use_decl_annotations_ void TruthRemoveSingleHideNode(
-	_In_ EptData* ept_data,
-	_In_ ShareDataContainer* shared_sh_data,
+_Use_decl_annotations_ void TruthRemoveSingleHideNode( 
+	_In_ ShareDataContainer* shared_data,
 	_In_ PEPROCESS proc
 )
 {
-	HYPERPLATFORM_LOG_ERROR("Single - ListSize: %d", shared_sh_data->UserModeList.size());
+	HYPERPLATFORM_LOG_ERROR("Single - ListSize: %d", shared_data->UserModeList.size());
 
-	for (auto& info : shared_sh_data->UserModeList)
+	for (auto& info : shared_data->UserModeList)
 	{
 		if (info->proc == proc)
 		{  
-			shared_sh_data->UserModeList.erase(
+			shared_data->UserModeList.erase(
 				std::remove(
-					shared_sh_data->UserModeList.begin(),
-					shared_sh_data->UserModeList.end(),
+					shared_data->UserModeList.begin(),
+					shared_data->UserModeList.end(),
 					info
 				),
-				shared_sh_data->UserModeList.end()
+				shared_data->UserModeList.end()
 			);
  			break; 
 		}
 	} 			
 
-	HYPERPLATFORM_LOG_ERROR("Single - ListSize: %d", shared_sh_data->UserModeList.size());
+	HYPERPLATFORM_LOG_ERROR("Single - ListSize: %d", shared_data->UserModeList.size());
 }
 //------------------------------------------------------------------------//
 _Use_decl_annotations_ bool TruthHandleBreakpoint(
 	HiddenData* sh_data,
-	const ShareDataContainer* shared_sh_data,
+	const ShareDataContainer* shared_data,
 	void* guest_ip) 
 {
+  UNREFERENCED_PARAMETER(shared_data);
+  UNREFERENCED_PARAMETER(guest_ip);
   UNREFERENCED_PARAMETER(sh_data);
   return true;
 }
@@ -349,22 +347,22 @@ _Use_decl_annotations_ bool TruthHandleBreakpoint(
 // Handles MTF VM-exit. Re-enables the shadow hook and clears MTF.
 _Use_decl_annotations_ void TruthHandleMonitorTrapFlag(
     HiddenData* sh_data, 
-	ShareDataContainer* shared_sh_data,
+	ShareDataContainer* shared_data,
     EptData* ept_data) 
 {	
-	NT_VERIFY(IsUserModeHideActive(shared_sh_data));
+	NT_VERIFY(IsUserModeHideActive(shared_data));
 
 /// there is a deadlock.
 	const auto info = TruthRestoreLastHideInfo(sh_data);         //get back last written EPT-Pte
 	TruthEnableEntryForExecuteOnly(*info, ept_data);		     //turn back read-only	  
-	TruthSetMonitorTrapFlag(sh_data, false);
+	TruthSetMonitorTrapFlag(false);
 
  } 
 #define ComparePage(x,y)  (PAGE_ALIGN(x) == PAGE_ALIGN(y))
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ bool TruthHandleEptViolation(
 	HiddenData* sh_data,  
-	ShareDataContainer* shared_sh_data,
+	ShareDataContainer* shared_data,
 	EptData* ept_data, 
 	void* fault_va, 
 	void* fault_pa ,
@@ -373,13 +371,13 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 	bool IsRead
 )
 { 
-	if (!IsUserModeHideActive(shared_sh_data)) 
+	if (!IsUserModeHideActive(shared_data))
 	{
 		return false;
 	}
 
 	//This have to handle carefully. Easily got hang from this. If we can't find 
-	const auto info = TruthFindHideInfoByPhyAddr(shared_sh_data,  (ULONG64)fault_pa);
+	const auto info = TruthFindHideInfoByPhyAddr(shared_data,  (ULONG64)fault_pa);
 
 	if (!info) {
 		HYPERPLATFORM_LOG_DEBUG("Cannot find info %d  fault_pa: %I64X  \r\n" ,PsGetCurrentProcessId(), fault_pa);
@@ -395,7 +393,7 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 			TruthEnableEntryForReadAndExec(*info, ept_data);	
 		}
 		//Set MTF flags 
-		TruthSetMonitorTrapFlag(sh_data, true);
+		TruthSetMonitorTrapFlag(true);
 		//used for reset read-only
 		TruthSaveLastHideInfo(sh_data, *info);
 
@@ -408,7 +406,7 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 		//Set R/W/!X for RING3/ RING0
 		TruthEnableEntryForAll(*info, ept_data);
 		//Set MTF flags 
-		TruthSetMonitorTrapFlag(sh_data, true);
+		TruthSetMonitorTrapFlag(true);
 		//used for reset read-only
 		TruthSaveLastHideInfo(sh_data, *info);
 	}
@@ -424,11 +422,11 @@ _Use_decl_annotations_ bool TruthHandleEptViolation(
 
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ EXTERN_C PMDLX TruthGetHideMDL(
-	_In_ ShareDataContainer* shared_sh_data,  
+	_In_ ShareDataContainer* shared_data,
 	_In_ PEPROCESS proc
 )
 {
-	for (auto &info : shared_sh_data->UserModeList) 
+	for (auto &info : shared_data->UserModeList)
 	{
 		if (info->proc == proc)
 		{
@@ -440,7 +438,7 @@ _Use_decl_annotations_ EXTERN_C PMDLX TruthGetHideMDL(
 
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
-	ShareDataContainer* shared_sh_data,
+	ShareDataContainer* shared_data,
 	void* address, 
 	const char* name, 
 	ULONG64 P_Paddr,
@@ -451,13 +449,13 @@ _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
 {
 	VariableHiding Factory;
 
-	if (!shared_sh_data)
+	if (!shared_data)
 	{
 		return FALSE;
 	} 
 
 	auto info = Factory.CreateNoTruthNode(address, name, CR3, mdl, proc, P_Paddr); 
-	shared_sh_data->UserModeList.push_back(std::move(info));
+	shared_data->UserModeList.push_back(std::move(info));
 
 	if (!info)
 	{
@@ -469,14 +467,14 @@ _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
 
 //-------------------------------------------------------------------------------//
 _Use_decl_annotations_ static HideInformation* TruthFindHideInfoByPhyAddr(
-	const ShareDataContainer* shared_sh_data, 
+	const ShareDataContainer* shared_data,
 	ULONG64 fault_pa
 )
 {
-	const auto found = std::find_if(shared_sh_data->UserModeList.cbegin(), shared_sh_data->UserModeList.cend(), [fault_pa](const auto& info) {	
+	const auto found = std::find_if(shared_data->UserModeList.cbegin(), shared_data->UserModeList.cend(), [fault_pa](const auto& info) {
 		return PAGE_ALIGN(info->NewPhysicalAddress) == PAGE_ALIGN(fault_pa);
 	});
-	if (found == shared_sh_data->UserModeList.cend()) 
+	if (found == shared_data->UserModeList.cend())
 	{
 		return nullptr;
 	}
@@ -528,7 +526,7 @@ _Use_decl_annotations_ static void TruthDisableVarHiding(const HideInformation& 
 }
 // Set MTF on the current processor
 //----------------------------------------------------------------------------------------------------------------------
-_Use_decl_annotations_ static void TruthSetMonitorTrapFlag(HiddenData* sh_data, bool enable)
+_Use_decl_annotations_ static void TruthSetMonitorTrapFlag(bool enable)
 {
   VmxProcessorBasedControls vm_procctl = {
       static_cast<unsigned int>(UtilVmRead(VmcsField::kCpuBasedVmExecControl))};

@@ -3,7 +3,7 @@
 
 
 std::unique_ptr<HideInformation> VariableHiding::CreateNoTruthNode(
-	PVOID address,
+	PVOID TargetAddress,
 	string name,
 	ULONG64 CR3, 
 	PVOID64 mdl,
@@ -12,7 +12,7 @@ std::unique_ptr<HideInformation> VariableHiding::CreateNoTruthNode(
 )
 {
 		
-	auto page_base = PAGE_ALIGN(address);
+	auto page_base = PAGE_ALIGN(TargetAddress);
 	auto info = std::make_unique<HideInformation>();
 	info->shadow_page_base_for_rw = std::make_shared<MyPage>();
 	info->shadow_page_base_for_exec = std::make_shared<MyPage>();
@@ -31,7 +31,7 @@ std::unique_ptr<HideInformation> VariableHiding::CreateNoTruthNode(
 	}
 
 	info->name = name;
-	info->patch_address = address;
+	info->patch_address = TargetAddress;
 	info->pa_base_original_page = UtilPaFromVa(page_base);
 	info->pa_base_for_rw = UtilPaFromVa(info->shadow_page_base_for_rw->page);
 	info->pa_base_for_exec = UtilPaFromVa(info->shadow_page_base_for_exec->page);

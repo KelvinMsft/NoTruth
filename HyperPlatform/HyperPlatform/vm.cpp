@@ -149,7 +149,7 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
 
   sharedata = reinterpret_cast<ShareDataContainer*>(shared_data->shared_sh_data);
 
-  status = NoTruthInitialization(shared_data->shared_sh_data);
+  status = NoTruthInitialization();
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVM, nullptr);
     return status;

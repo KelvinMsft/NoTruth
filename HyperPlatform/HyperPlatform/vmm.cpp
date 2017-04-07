@@ -793,7 +793,7 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(GuestContext *guest_contex
         // CR3 <- Reg
         case 3: {
           HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
-		  ULONG64 guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
+		 // ULONG64 guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
           if (UtilIsX86Pae()) {
             UtilLoadPdptes(*register_used);
           }
@@ -931,7 +931,6 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   {
 	  //set GVA->GPA -----> EPT PTE entry to read-only
 	  TruthEnableAllMemoryHide(
-		  guest_context->stack->processor_data->sh_data,
 		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );
@@ -969,7 +968,6 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   else if (hypercall_number == HypercallNumber::kRemoveSingleHideNode)
   { 
 	  TruthRemoveSingleHideNode(
-		  guest_context->stack->processor_data->ept_data,
 		  guest_context->stack->processor_data->shared_data->shared_sh_data,
 		  (PEPROCESS)context
 	  );
@@ -980,8 +978,7 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(GuestContext *guest_context)
   }
   else if (hypercall_number == HypercallNumber::kRemoveAllHideNode)
   {
-	  TruthRemoveAllHideNode(
-		  guest_context->stack->processor_data->ept_data,
+	  TruthRemoveAllHideNode( 
 		  guest_context->stack->processor_data->shared_data->shared_sh_data
 	  );
 

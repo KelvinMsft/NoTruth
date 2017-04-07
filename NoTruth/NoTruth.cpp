@@ -70,10 +70,10 @@ typedef struct _SECURITY_ATTRIBUTES {
 //--------------------------------------------------------------------/
 PMDLX LockMemory(
 	PVOID startAddr,
-	ULONG len, 
-	PKAPC_STATE apcstate
+	ULONG len
 )
 {
+
 	PMDLX mdl = NULL;
 
 	// Attach to process to ensure virtual addresses are correct
@@ -93,23 +93,15 @@ PMDLX LockMemory(
 	return mdl;
 }
 //--------------------------------------------------------------------------------------//
-void UnLockMemory(
-	PEPROCESS proc,
-	PKAPC_STATE apcstate, 
+void UnLockMemory( 
 	PMDLX mdl
 )
 {
-	// Attach to process to ensure virtual addresses are correct
-	KeStackAttachProcess(proc, apcstate);
-
+	// Attach to process to ensure virtual addresses are correct 
 	// Unlock & free MDL and corresponding pages
 	MmUnlockPages(mdl);
-	IoFreeMdl(mdl);
-
-	KeUnstackDetachProcess(apcstate);
-
-	HYPERPLATFORM_LOG_INFO("Unlocked Memory \r\n");
-
+	IoFreeMdl(mdl); 
+	HYPERPLATFORM_LOG_INFO("Unlocked Memory \r\n"); 
 }
 
 
@@ -128,7 +120,7 @@ NTSTATUS AddMemoryHide(PEPROCESS proc, ULONG64 Address) {
 	cr3 = __readcr3(); 
 
 	//ensure resides in physical memory 
-	mdl = LockMemory((PVOID)Address, PAGE_SIZE, &ApcState);
+	mdl = LockMemory((PVOID)Address, PAGE_SIZE);
 
 	if (TruthCreateNewHiddenNode(
 		reinterpret_cast<ShareDataContainer*>(sharedata), //included two list var_hide and hook_hide
@@ -166,6 +158,7 @@ VOID ProcessMonitor(
 	IN HANDLE  ProcessId,
 	IN BOOLEAN  Create)
 {
+	UNREFERENCED_PARAMETER(ParentId);
 	char *procName;
 	PEPROCESS proc;
 	PsLookupProcessByProcessId(ProcessId, &proc);
@@ -188,16 +181,15 @@ VOID ProcessMonitor(
 			TruthDisableHideByProcess(proc);
 			 
 			if (mdl)
-			{
-				KAPC_STATE apcstate;
-				UnLockMemory(proc, &apcstate, mdl); 
+			{  
+				UnLockMemory(mdl); 
 			}
 		}
 	}
 }
 
 //--------------------------------------------------------------------------------------//
-_Use_decl_annotations_ EXTERN_C NTSTATUS NoTruthInitialization(ShareDataContainer* shared_sh_data) 
+_Use_decl_annotations_ EXTERN_C NTSTATUS NoTruthInitialization() 
 {
   PAGED_CODE();
 

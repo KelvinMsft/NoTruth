@@ -90,7 +90,6 @@ _IRQL_requires_max_(PASSIVE_LEVEL) EXTERN_C NTSTATUS TruthDisableHideByProcess(
 	PEPROCESS proc);
 
 _IRQL_requires_min_(DISPATCH_LEVEL) void TruthEnableAllMemoryHide(
-	_In_ HiddenData* data,
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data);
 
@@ -101,8 +100,7 @@ _IRQL_requires_min_(DISPATCH_LEVEL) void TruthDisableSingleMemoryHide(
 	_In_ PEPROCESS proc
 );
 
-_Use_decl_annotations_ void TruthRemoveSingleHideNode(
-	_In_ EptData* ept_data,
+_Use_decl_annotations_ void TruthRemoveSingleHideNode( 
 	_In_ ShareDataContainer* shared_sh_data,
 	_In_ PEPROCESS proc
 );
@@ -111,8 +109,7 @@ _IRQL_requires_min_(DISPATCH_LEVEL) void TruthDisableAllMemoryHide(
 	_In_ EptData* ept_data,
 	_In_ ShareDataContainer* shared_sh_data);
 
-_Use_decl_annotations_ void TruthRemoveAllHideNode(
-	_In_ EptData* ept_data,
+_Use_decl_annotations_ void TruthRemoveAllHideNode( 
 	_In_ ShareDataContainer* shared_sh_data
 );
 
