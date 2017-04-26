@@ -430,16 +430,7 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(GuestContext *guest_context) 
 	guest_context->gp_regs->cx = cpu_info[2];// &0XFFFFFFDF;
     guest_context->gp_regs->dx = cpu_info[3]; 
   }
-  //tf trap
-  if (guest_context->flag_reg.fields.tf) {
-	  VmEntryInterruptionInformationField inject = {};
-	  inject.fields.interruption_type = static_cast<ULONG32>(interruption_type::kHardwareException);
-	  inject.fields.vector = static_cast<ULONG32>(InterruptionVector::kTrapFlags);
-	  inject.fields.deliver_error_code = false;
-	  inject.fields.valid = true;
-	  UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-  }
-
+	
   VmmpAdjustGuestInstructionPointer(guest_context->ip);
 }
 
