@@ -60,6 +60,8 @@ struct HiddenData {
 //
 // prototypes
 //
+static HideInformation* TruthFindHideInfoByVaAddr(
+	const ShareDataContainer* shared_sh_data, void* address);
 
 static HideInformation* TruthFindHideInfoByPhyAddr(
 	const ShareDataContainer* shared_sh_data, ULONG64 fault_pa);
@@ -465,7 +467,12 @@ _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
 	{
 		return FALSE;
 	} 
-
+	//Filter repeat address
+	auto found = TruthFindHideInfoByVaAddr(shared_data, address);
+	if (found != nullptr)
+	{
+		return true;
+	}
 	auto info = Factory.CreateNoTruthNode(address, name, CR3, mdl, proc, P_Paddr); 
 	shared_data->UserModeList.push_back(std::move(info));
 
@@ -475,6 +482,22 @@ _Use_decl_annotations_ EXTERN_C bool TruthCreateNewHiddenNode(
 	}	
 	HYPERPLATFORM_LOG_INFO("Info Empty Create Failed \r\n");
 	return true;
+}
+
+//-------------------------------------------------------------------------------//
+_Use_decl_annotations_ static HideInformation* TruthFindHideInfoByVaAddr(
+	const ShareDataContainer* shared_sh_data,
+	void* address
+)
+{
+	const auto found = std::find_if(shared_sh_data->UserModeList.cbegin(), shared_sh_data->UserModeList.cend(), [address](const auto& info) {
+		return PAGE_ALIGN(info->patch_address) == PAGE_ALIGN(address);
+	});
+	if (found == shared_sh_data->UserModeList.cend())
+	{
+		return nullptr;
+	}
+	return found->get();
 }
 
 //-------------------------------------------------------------------------------//
