@@ -429,6 +429,16 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(GuestContext *guest_context) 
     guest_context->gp_regs->bx = cpu_info[1]; 
 	guest_context->gp_regs->cx = cpu_info[2];// &0XFFFFFFDF;
     guest_context->gp_regs->dx = cpu_info[3]; 
+	if (function_id == 1) {
+		/**
+		CPUID eax为1时,单步之后ecx 31位代表hypervisor
+		Running on a hypervisor (always 0 on a real CPU, but also with some hypervisors)
+		也就是真机31位为0，虚拟机最高位是1也就是0x8****
+		https://en.wikipedia.org/wiki/CPUID#EAX.3D1:_Processor_Info_and_Feature_Bits
+		*/
+		guest_context->gp_regs->cx &= ~(1 << 31);
+		//guest_context->gp_regs->cx = 0;
+	}
   }
   //tf trap
   if (guest_context->flag_reg.fields.tf) {
