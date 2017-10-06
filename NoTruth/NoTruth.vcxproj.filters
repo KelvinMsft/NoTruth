@@ -77,6 +77,9 @@
     <ClInclude Include="MemoryHide.h">
       <Filter>NoTruth\Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\HyperPlatform\HyperPlatform\util_page_constants.h">
+      <Filter>Common\Header</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\HyperPlatform\HyperPlatform\Arch\x64\x64.asm">

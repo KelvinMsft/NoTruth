@@ -522,7 +522,7 @@ _Use_decl_annotations_ static void TruthEnableEntryForExecuteOnly(const HideInfo
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_exec, FALSE, FALSE, TRUE);
-	UtilInveptAll(); 
+	UtilInveptGlobal(); 
 }
 //----------------------------------------------------------------------------------------------------------------------
 _Use_decl_annotations_ static void TruthEnableEntryForAll(const HideInformation& info, EptData* ept_data)
@@ -530,7 +530,7 @@ _Use_decl_annotations_ static void TruthEnableEntryForAll(const HideInformation&
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_exec, TRUE, TRUE, TRUE);
-	UtilInveptAll();
+	UtilInveptGlobal();
 }
 //----------------------------------------------------------------------------------------------------------------------
 _Use_decl_annotations_ static void TruthEnableEntryForReadOnly(const HideInformation& info, EptData* ept_data)
@@ -539,7 +539,7 @@ _Use_decl_annotations_ static void TruthEnableEntryForReadOnly(const HideInforma
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_rw, TRUE, FALSE, FALSE);
-	UtilInveptAll();
+	UtilInveptGlobal();
 }
 //----------------------------------------------------------------------------------------------------------------------
 _Use_decl_annotations_ static void TruthEnableEntryForReadAndExec(const HideInformation& info, EptData* ept_data)
@@ -548,7 +548,7 @@ _Use_decl_annotations_ static void TruthEnableEntryForReadAndExec(const HideInfo
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_for_exec, TRUE, FALSE, TRUE);
-	UtilInveptAll();
+	UtilInveptGlobal();
 }
 //----------------------------------------------------------------------------------------------------------------------
 _Use_decl_annotations_ static void TruthDisableVarHiding(const HideInformation& info, EptData* ept_data)
@@ -557,7 +557,7 @@ _Use_decl_annotations_ static void TruthDisableVarHiding(const HideInformation& 
 	ULONG64 newPA = 0;
 	GetPhysicalAddressByNewCR3(info.patch_address, info.CR3, &newPA);
 	ModifyEPTEntryRWX(ept_data, newPA, info.pa_base_original_page, TRUE, TRUE, TRUE);  
-	UtilInveptAll();
+	UtilInveptGlobal();
 }
 // Set MTF on the current processor
 //----------------------------------------------------------------------------------------------------------------------

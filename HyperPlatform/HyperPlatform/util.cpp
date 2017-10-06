@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
+// Copyright (c) 2015-2017, Satoshi Tanda. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 
@@ -24,83 +24,16 @@ extern "C" {
 
 // Use RtlPcToFileHeader if available. Using the API causes a broken font bug
 // on the 64 bit Windows 10 and should be avoided. This flag exist for only
-// futher investigation.
+// further investigation.
 static const auto kUtilpUseRtlPcToFileHeader = false;
-
-#if defined(_AMD64_)
-
-// Base addresses of page structures. Use !pte to obtain them.
-static const auto kUtilpPxeBase = 0xfffff6fb7dbed000ull;
-static const auto kUtilpPpeBase = 0xfffff6fb7da00000ull;
-static const auto kUtilpPdeBase = 0xfffff6fb40000000ull;
-static const auto kUtilpPteBase = 0xfffff68000000000ull;
-
-// Get the highest 25 bits
-static const auto kUtilpPxiShift = 39ull;
-
-// Get the highest 34 bits
-static const auto kUtilpPpiShift = 30ull;
-
-// Get the highest 43 bits
-static const auto kUtilpPdiShift = 21ull;
-
-// Get the highest 52 bits
-static const auto kUtilpPtiShift = 12ull;
-
-// Use  9 bits; 0b0000_0000_0000_0000_0000_0000_0001_1111_1111
-static const auto kUtilpPxiMask = 0x1ffull;
-
-// Use 18 bits; 0b0000_0000_0000_0000_0011_1111_1111_1111_1111
-static const auto kUtilpPpiMask = 0x3ffffull;
-
-// Use 27 bits; 0b0000_0000_0111_1111_1111_1111_1111_1111_1111
-static const auto kUtilpPdiMask = 0x7ffffffull;
-
-// Use 36 bits; 0b1111_1111_1111_1111_1111_1111_1111_1111_1111
-static const auto kUtilpPtiMask = 0xfffffffffull;
-
-#elif defined(_X86_)
-
-// Base addresses of page structures. Use !pte to obtain them.
-static const auto kUtilpPdeBase = 0xc0300000;
-static const auto kUtilpPteBase = 0xc0000000;
-
-// Get the highest 10 bits
-static const auto kUtilpPdiShift = 22;
-
-// Get the highest 20 bits
-static const auto kUtilpPtiShift = 12;
-
-// Use 10 bits; 0b0000_0000_0000_0000_0000_0000_0011_1111_1111
-static const auto kUtilpPdiMask = 0x3ff;
-
-// Use 20 bits; 0b0000_0000_0000_0000_1111_1111_1111_1111_1111
-static const auto kUtilpPtiMask = 0xfffff;
-
-#endif
-
-// Base addresses of page structures. Use !pte to obtain them.
-static const auto kUtilpPdeBasePae = 0xc0600000;
-static const auto kUtilpPteBasePae = 0xc0000000;
-
-// Get the highest 11 bits
-static const auto kUtilpPdiShiftPae = 21;
-
-// Get the highest 20 bits
-static const auto kUtilpPtiShiftPae = 12;
-
-// Use 11 bits; 0b0000_0000_0000_0000_0000_0000_0111_1111_1111
-static const auto kUtilpPdiMaskPae = 0x7ff;
-
-// Use 20 bits; 0b0000_0000_0000_0000_1111_1111_1111_1111_1111
-static const auto kUtilpPtiMaskPae = 0xfffff;
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // types
 //
 
-PVOID NTAPI RtlPcToFileHeader(_In_ PVOID PcValue, _Out_ PVOID *BaseOfImage);
+NTKERNELAPI PVOID NTAPI RtlPcToFileHeader(_In_ PVOID PcValue,
+                                          _Out_ PVOID *BaseOfImage);
 
 using RtlPcToFileHeaderType = decltype(RtlPcToFileHeader);
 
@@ -134,6 +67,9 @@ struct LdrDataTableEntry {
 //
 
 _IRQL_requires_max_(PASSIVE_LEVEL) static NTSTATUS
+    UtilpInitializePageTableVariables();
+
+_IRQL_requires_max_(PASSIVE_LEVEL) static NTSTATUS
     UtilpInitializeRtlPcToFileHeader(_In_ PDRIVER_OBJECT driver_object);
 
 _Success_(return != nullptr) static PVOID NTAPI
@@ -145,26 +81,24 @@ _IRQL_requires_max_(PASSIVE_LEVEL) static NTSTATUS
 _IRQL_requires_max_(PASSIVE_LEVEL) static PhysicalMemoryDescriptor
     *UtilpBuildPhysicalMemoryRanges();
 
-#if defined(_AMD64_)
+static bool UtilpIsCanonicalFormAddress(_In_ void *address);
+
 static HardwarePte *UtilpAddressToPxe(_In_ const void *address);
 
 static HardwarePte *UtilpAddressToPpe(_In_ const void *address);
-#endif
 
 static HardwarePte *UtilpAddressToPde(_In_ const void *address);
 
 static HardwarePte *UtilpAddressToPte(_In_ const void *address);
 
-static HardwarePte *UtilpAddressToPdePAE(_In_ const void *address);
-
-static HardwarePte *UtilpAddressToPtePAE(_In_ const void *address);
-
 #if defined(ALLOC_PRAGMA)
 #pragma alloc_text(INIT, UtilInitialization)
 #pragma alloc_text(PAGE, UtilTermination)
+#pragma alloc_text(INIT, UtilpInitializePageTableVariables)
 #pragma alloc_text(INIT, UtilpInitializeRtlPcToFileHeader)
 #pragma alloc_text(INIT, UtilpInitializePhysicalMemoryRanges)
 #pragma alloc_text(INIT, UtilpBuildPhysicalMemoryRanges)
+#pragma alloc_text(PAGE, UtilForEachProcessor)
 #pragma alloc_text(PAGE, UtilSleep)
 #pragma alloc_text(PAGE, UtilGetSystemProcAddress)
 #endif
@@ -183,16 +117,40 @@ static PhysicalMemoryDescriptor *g_utilp_physical_memory_ranges;
 static MmAllocateContiguousNodeMemoryType
     *g_utilp_MmAllocateContiguousNodeMemory;
 
+static ULONG_PTR g_utilp_pxe_base = 0;
+static ULONG_PTR g_utilp_ppe_base = 0;
+static ULONG_PTR g_utilp_pde_base = 0;
+static ULONG_PTR g_utilp_pte_base = 0;
+
+static ULONG_PTR g_utilp_pxi_shift = 0;
+static ULONG_PTR g_utilp_ppi_shift = 0;
+static ULONG_PTR g_utilp_pdi_shift = 0;
+static ULONG_PTR g_utilp_pti_shift = 0;
+
+static ULONG_PTR g_utilp_pxi_mask = 0;
+static ULONG_PTR g_utilp_ppi_mask = 0;
+static ULONG_PTR g_utilp_pdi_mask = 0;
+static ULONG_PTR g_utilp_pti_mask = 0;
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // implementations
 //
-//-----------------------------------------------------------------------------------------//
+
 // Initializes utility functions
-_Use_decl_annotations_ NTSTATUS UtilInitialization(PDRIVER_OBJECT driver_object) {
+_Use_decl_annotations_ NTSTATUS
+UtilInitialization(PDRIVER_OBJECT driver_object) {
   PAGED_CODE();
 
-  auto status = UtilpInitializeRtlPcToFileHeader(driver_object);
+  auto status = UtilpInitializePageTableVariables();
+  HYPERPLATFORM_LOG_DEBUG("PXE at %016Ix, PPE at %016Ix, PDE at %016Ix, PTE at %016Ix",
+                          g_utilp_pxe_base, g_utilp_ppe_base, g_utilp_pde_base,
+                          g_utilp_pte_base);
+  if (!NT_SUCCESS(status)) {
+    return status;
+  }
+
+  status = UtilpInitializeRtlPcToFileHeader(driver_object);
   if (!NT_SUCCESS(status)) {
     return status;
   }
@@ -208,7 +166,6 @@ _Use_decl_annotations_ NTSTATUS UtilInitialization(PDRIVER_OBJECT driver_object)
   return status;
 }
 
-//-----------------------------------------------------------------------------------------//
 // Terminates utility functions
 _Use_decl_annotations_ void UtilTermination() {
   PAGED_CODE();
@@ -218,7 +175,96 @@ _Use_decl_annotations_ void UtilTermination() {
                       kHyperPlatformCommonPoolTag);
   }
 }
-//-----------------------------------------------------------------------------------------//
+
+// Initializes g_utilp_p*e_base, g_utilp_p*i_shift and g_utilp_p*i_mask.
+_Use_decl_annotations_ static NTSTATUS UtilpInitializePageTableVariables() {
+  PAGED_CODE();
+
+#include "util_page_constants.h"  // Include platform dependent constants
+
+  // Check OS version to know if page table base addresses need to be relocated
+  RTL_OSVERSIONINFOW os_version = {sizeof(os_version)};
+  auto status = RtlGetVersion(&os_version);
+  if (!NT_SUCCESS(status)) {
+    return status;
+  }
+
+  // Win 10 build 14316 is the first version implements randomized page tables
+  // Use fixed values if a systems is either: x86, older than Windows 7, or
+  // older than build 14316.
+  if (!IsX64() || os_version.dwMajorVersion < 10 ||
+      os_version.dwBuildNumber < 14316) {
+    if (IsX64()) {
+      g_utilp_pxe_base = kUtilpPxeBase;
+      g_utilp_ppe_base = kUtilpPpeBase;
+      g_utilp_pxi_shift = kUtilpPxiShift;
+      g_utilp_ppi_shift = kUtilpPpiShift;
+      g_utilp_pxi_mask = kUtilpPxiMask;
+      g_utilp_ppi_mask = kUtilpPpiMask;
+    }
+    if (UtilIsX86Pae()) {
+      g_utilp_pde_base = kUtilpPdeBasePae;
+      g_utilp_pte_base = kUtilpPteBasePae;
+      g_utilp_pdi_shift = kUtilpPdiShiftPae;
+      g_utilp_pti_shift = kUtilpPtiShiftPae;
+      g_utilp_pdi_mask = kUtilpPdiMaskPae;
+      g_utilp_pti_mask = kUtilpPtiMaskPae;
+    } else {
+      g_utilp_pde_base = kUtilpPdeBase;
+      g_utilp_pte_base = kUtilpPteBase;
+      g_utilp_pdi_shift = kUtilpPdiShift;
+      g_utilp_pti_shift = kUtilpPtiShift;
+      g_utilp_pdi_mask = kUtilpPdiMask;
+      g_utilp_pti_mask = kUtilpPtiMask;
+    }
+    return status;
+  }
+
+  // Get PTE_BASE from MmGetVirtualForPhysical
+  const auto p_MmGetVirtualForPhysical =
+      UtilGetSystemProcAddress(L"MmGetVirtualForPhysical");
+  if (!p_MmGetVirtualForPhysical) {
+    return STATUS_PROCEDURE_NOT_FOUND;
+  }
+
+  static const UCHAR kPatternWin10x64[] = {
+      0x48, 0x8b, 0x04, 0xd0,  // mov     rax, [rax+rdx*8]
+      0x48, 0xc1, 0xe0, 0x19,  // shl     rax, 19h
+      0x48, 0xba,              // mov     rdx, ????????`????????  ; PTE_BASE
+  };
+  auto found = reinterpret_cast<ULONG_PTR>(
+      UtilMemMem(p_MmGetVirtualForPhysical, 0x30, kPatternWin10x64,
+                 sizeof(kPatternWin10x64)));
+  if (!found) {
+    return STATUS_PROCEDURE_NOT_FOUND;
+  }
+
+  found += sizeof(kPatternWin10x64);
+  HYPERPLATFORM_LOG_DEBUG("Found a hard coded PTE_BASE at %016Ix", found);
+
+  const auto pte_base = *reinterpret_cast<ULONG_PTR *>(found);
+  const auto index = (pte_base >> kUtilpPxiShift) & kUtilpPxiMask;
+  const auto pde_base = pte_base | (index << kUtilpPpiShift);
+  const auto ppe_base = pde_base | (index << kUtilpPdiShift);
+  const auto pxe_base = ppe_base | (index << kUtilpPtiShift);
+
+  g_utilp_pxe_base = static_cast<ULONG_PTR>(pxe_base);
+  g_utilp_ppe_base = static_cast<ULONG_PTR>(ppe_base);
+  g_utilp_pde_base = static_cast<ULONG_PTR>(pde_base);
+  g_utilp_pte_base = static_cast<ULONG_PTR>(pte_base);
+
+  g_utilp_pxi_shift = kUtilpPxiShift;
+  g_utilp_ppi_shift = kUtilpPpiShift;
+  g_utilp_pdi_shift = kUtilpPdiShift;
+  g_utilp_pti_shift = kUtilpPtiShift;
+
+  g_utilp_pxi_mask = kUtilpPxiMask;
+  g_utilp_ppi_mask = kUtilpPpiMask;
+  g_utilp_pdi_mask = kUtilpPdiMask;
+  g_utilp_pti_mask = kUtilpPtiMask;
+  return status;
+}
+
 // Locates RtlPcToFileHeader
 _Use_decl_annotations_ static NTSTATUS UtilpInitializeRtlPcToFileHeader(
     PDRIVER_OBJECT driver_object) {
@@ -244,8 +290,8 @@ _Use_decl_annotations_ static NTSTATUS UtilpInitializeRtlPcToFileHeader(
   g_utilp_RtlPcToFileHeader = UtilpUnsafePcToFileHeader;
   return STATUS_SUCCESS;
 }
-//-----------------------------------------------------------------------------------------//
-// A fake RtlPcToFileHeader without accquireing PsLoadedModuleSpinLock. Thus, it
+
+// A fake RtlPcToFileHeader without acquiring PsLoadedModuleSpinLock. Thus, it
 // is unsafe and should be updated if we can locate PsLoadedModuleSpinLock.
 _Use_decl_annotations_ static PVOID NTAPI
 UtilpUnsafePcToFileHeader(PVOID pc_value, PVOID *base_of_image) {
@@ -266,42 +312,44 @@ UtilpUnsafePcToFileHeader(PVOID pc_value, PVOID *base_of_image) {
   }
   return nullptr;
 }
-//-----------------------------------------------------------------------------------------//
+
 // A wrapper of RtlPcToFileHeader
-_Use_decl_annotations_ PVOID UtilPcToFileHeader(PVOID pc_value) {
+_Use_decl_annotations_ void *UtilPcToFileHeader(void *pc_value) {
   void *base = nullptr;
   return g_utilp_RtlPcToFileHeader(pc_value, &base);
 }
-//-----------------------------------------------------------------------------------------//
+
+// Initializes the physical memory ranges
 _Use_decl_annotations_ static NTSTATUS UtilpInitializePhysicalMemoryRanges() {
   PAGED_CODE();
 
   const auto ranges = UtilpBuildPhysicalMemoryRanges();
-  if (!ranges) 
-  {
+  if (!ranges) {
     return STATUS_UNSUCCESSFUL;
   }
 
   g_utilp_physical_memory_ranges = ranges;
 
-   for (auto i = 0ul; i < ranges->number_of_runs; ++i) {
+  for (auto i = 0ul; i < ranges->number_of_runs; ++i) {
     const auto base_addr =
         static_cast<ULONG64>(ranges->run[i].base_page) * PAGE_SIZE;
     HYPERPLATFORM_LOG_DEBUG("Physical Memory Range: %016llx - %016llx",
                             base_addr,
                             base_addr + ranges->run[i].page_count * PAGE_SIZE);
   }
-   const auto pm_size = static_cast<ULONG64>(ranges->number_of_pages) * PAGE_SIZE;
 
-   HYPERPLATFORM_LOG_DEBUG("Physical Memory Total: %llu KB", pm_size / 1024);
+  const auto pm_size =
+      static_cast<ULONG64>(ranges->number_of_pages) * PAGE_SIZE;
+  HYPERPLATFORM_LOG_DEBUG("Physical Memory Total: %llu KB", pm_size / 1024);
 
   return STATUS_SUCCESS;
 }
-//-----------------------------------------------------------------------------------------//
+
 // Builds the physical memory ranges
-_Use_decl_annotations_ static PhysicalMemoryDescriptor *UtilpBuildPhysicalMemoryRanges() {
+_Use_decl_annotations_ static PhysicalMemoryDescriptor *
+UtilpBuildPhysicalMemoryRanges() {
   PAGED_CODE();
-   
+
   const auto pm_ranges = MmGetPhysicalMemoryRanges();
   if (!pm_ranges) {
     return nullptr;
@@ -309,87 +357,83 @@ _Use_decl_annotations_ static PhysicalMemoryDescriptor *UtilpBuildPhysicalMemory
 
   PFN_COUNT number_of_runs = 0;
   PFN_NUMBER number_of_pages = 0;
-   
-  for (;;++number_of_runs) 
-  { 
+  for (/**/; /**/; ++number_of_runs) {
     const auto range = &pm_ranges[number_of_runs];
-
-     if (!range->BaseAddress.QuadPart && !range->NumberOfBytes.QuadPart) 
-	{
+    if (!range->BaseAddress.QuadPart && !range->NumberOfBytes.QuadPart) {
       break;
-    } 
-    number_of_pages += static_cast<PFN_NUMBER>(BYTES_TO_PAGES(range->NumberOfBytes.QuadPart));
+    }
+    number_of_pages +=
+        static_cast<PFN_NUMBER>(BYTES_TO_PAGES(range->NumberOfBytes.QuadPart));
   }
-   
   if (number_of_runs == 0) {
     ExFreePoolWithTag(pm_ranges, 'hPmM');
     return nullptr;
-  } 
-   const auto memory_block_size = sizeof(PhysicalMemoryDescriptor) + sizeof(PhysicalMemoryRun) * (number_of_runs - 1);
+  }
 
-   const auto pm_block = reinterpret_cast<PhysicalMemoryDescriptor *>(
-	  ExAllocatePoolWithTag(NonPagedPoolNx, memory_block_size, kHyperPlatformCommonPoolTag));
-
+  const auto memory_block_size =
+      sizeof(PhysicalMemoryDescriptor) +
+      sizeof(PhysicalMemoryRun) * (number_of_runs - 1);
+  const auto pm_block =
+      reinterpret_cast<PhysicalMemoryDescriptor *>(ExAllocatePoolWithTag(
+          NonPagedPool, memory_block_size, kHyperPlatformCommonPoolTag));
   if (!pm_block) {
     ExFreePoolWithTag(pm_ranges, 'hPmM');
     return nullptr;
   }
   RtlZeroMemory(pm_block, memory_block_size);
 
-   pm_block->number_of_runs = number_of_runs;
-   pm_block->number_of_pages = number_of_pages;
+  pm_block->number_of_runs = number_of_runs;
+  pm_block->number_of_pages = number_of_pages;
 
-   for (auto run_index = 0ul; run_index < number_of_runs; run_index++) 
-  {
-     auto current_run = &pm_block->run[run_index];
-     auto current_block = &pm_ranges[run_index];
-     current_run->base_page = static_cast<ULONG_PTR>(UtilPfnFromPa(current_block->BaseAddress.QuadPart));
-     current_run->page_count = static_cast<ULONG_PTR>(BYTES_TO_PAGES(current_block->NumberOfBytes.QuadPart));
+  for (auto run_index = 0ul; run_index < number_of_runs; run_index++) {
+    auto current_run = &pm_block->run[run_index];
+    auto current_block = &pm_ranges[run_index];
+    current_run->base_page = static_cast<ULONG_PTR>(
+        UtilPfnFromPa(current_block->BaseAddress.QuadPart));
+    current_run->page_count = static_cast<ULONG_PTR>(
+        BYTES_TO_PAGES(current_block->NumberOfBytes.QuadPart));
   }
 
   ExFreePoolWithTag(pm_ranges, 'hPmM');
-    
   return pm_block;
 }
-//-----------------------------------------------------------------------------------------//
+
 // Returns the physical memory ranges
 /*_Use_decl_annotations_*/ const PhysicalMemoryDescriptor *
 UtilGetPhysicalMemoryRanges() {
   return g_utilp_physical_memory_ranges;
 }
-//-----------------------------------------------------------------------------------------//
-// Execute a given callback routine on all processors in DPC_LEVEL. Returns
+
+// Execute a given callback routine on all processors in PASSIVE_LEVEL. Returns
 // STATUS_SUCCESS when all callback returned STATUS_SUCCESS as well. When
 // one of callbacks returns anything but STATUS_SUCCESS, this function stops
 // to call remaining callbacks and returns the value.
-_Use_decl_annotations_ NTSTATUS UtilForEachProcessor(NTSTATUS (*callback_routine)(void *), void *context) {
-  
-  const auto number_of_processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+_Use_decl_annotations_ NTSTATUS
+UtilForEachProcessor(NTSTATUS (*callback_routine)(void *), void *context) {
+  PAGED_CODE();
 
-  for (ULONG processor_index = 0; processor_index < number_of_processors; processor_index++) {
-    
-	PROCESSOR_NUMBER processor_number = {};
-    
-	auto status = KeGetProcessorNumberFromIndex(processor_index, &processor_number);
-    
-	if (!NT_SUCCESS(status)) {
+  const auto number_of_processors =
+      KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+  for (ULONG processor_index = 0; processor_index < number_of_processors;
+       processor_index++) {
+    PROCESSOR_NUMBER processor_number = {};
+    auto status =
+        KeGetProcessorNumberFromIndex(processor_index, &processor_number);
+    if (!NT_SUCCESS(status)) {
       return status;
     }
-	
-	//ÇÐ“Q®”Ç°cpu
+
+    // Switch the current processor
     GROUP_AFFINITY affinity = {};
     affinity.Group = processor_number.Group;
     affinity.Mask = 1ull << processor_number.Number;
-
     GROUP_AFFINITY previous_affinity = {};
     KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
 
-	
     // Execute callback
     status = callback_routine(context);
 
     KeRevertToUserGroupAffinityThread(&previous_affinity);
-
     if (!NT_SUCCESS(status)) {
       return status;
     }
@@ -397,7 +441,39 @@ _Use_decl_annotations_ NTSTATUS UtilForEachProcessor(NTSTATUS (*callback_routine
   return STATUS_SUCCESS;
 }
 
-// Sleep the current thread's execution for Millisecond milli-seconds.
+// Queues a given DPC routine on all processors. Returns STATUS_SUCCESS when DPC
+// is queued for all processors.
+_Use_decl_annotations_ NTSTATUS
+UtilForEachProcessorDpc(PKDEFERRED_ROUTINE deferred_routine, void *context) {
+  const auto number_of_processors =
+      KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+  for (ULONG processor_index = 0; processor_index < number_of_processors;
+       processor_index++) {
+    PROCESSOR_NUMBER processor_number = {};
+    auto status =
+        KeGetProcessorNumberFromIndex(processor_index, &processor_number);
+    if (!NT_SUCCESS(status)) {
+      return status;
+    }
+
+    const auto dpc = reinterpret_cast<PRKDPC>(ExAllocatePoolWithTag(
+        NonPagedPool, sizeof(KDPC), kHyperPlatformCommonPoolTag));
+    if (!dpc) {
+      return STATUS_MEMORY_NOT_ALLOCATED;
+    }
+    KeInitializeDpc(dpc, deferred_routine, context);
+    KeSetImportanceDpc(dpc, HighImportance);
+    status = KeSetTargetProcessorDpcEx(dpc, &processor_number);
+    if (!NT_SUCCESS(status)) {
+      ExFreePoolWithTag(dpc, kHyperPlatformCommonPoolTag);
+      return status;
+    }
+    KeInsertQueueDpc(dpc, nullptr, nullptr);
+  }
+  return STATUS_SUCCESS;
+}
+
+// Sleep the current thread's execution for Millisecond milliseconds.
 _Use_decl_annotations_ NTSTATUS UtilSleep(LONG Millisecond) {
   PAGED_CODE();
 
@@ -437,22 +513,22 @@ _Use_decl_annotations_ void *UtilGetSystemProcAddress(
   return (!IsX64() && Cr4{__readcr4()}.fields.pae);
 }
 
-// Return true if the given address is accessible. It does not prevent a race
-// condition.
+// Return true if the given address is accessible.
 _Use_decl_annotations_ bool UtilIsAccessibleAddress(void *address) {
-#if defined(_AMD64_)
-  const auto pxe = UtilpAddressToPxe(address);
-  const auto ppe = UtilpAddressToPpe(address);
-  if (!pxe->valid || !ppe->valid) {
+  if (!UtilpIsCanonicalFormAddress(address)) {
     return false;
   }
-#endif
 
-  const auto is_x86_pae = UtilIsX86Pae();
-  const auto pde =
-      (is_x86_pae) ? UtilpAddressToPdePAE(address) : UtilpAddressToPde(address);
-  const auto pte =
-      (is_x86_pae) ? UtilpAddressToPtePAE(address) : UtilpAddressToPte(address);
+  if (IsX64()) {
+    const auto pxe = UtilpAddressToPxe(address);
+    const auto ppe = UtilpAddressToPpe(address);
+    if (!pxe->valid || !ppe->valid) {
+      return false;
+    }
+  }
+
+  const auto pde = UtilpAddressToPde(address);
+  const auto pte = UtilpAddressToPte(address);
   if (!pde->valid) {
     return false;
   }
@@ -465,108 +541,49 @@ _Use_decl_annotations_ bool UtilIsAccessibleAddress(void *address) {
   return true;
 }
 
-// Virtual Address Interpretation For Handling PTEs
-//
-// -- On x64
-// Sign extension                     16 bits
-// Page map level 4 selector           9 bits
-// Page directory pointer selector     9 bits
-// Page directory selector             9 bits
-// Page table selector                 9 bits
-// Byte within page                   12 bits
-// 11111111 11111111 11111000 10000000 00000011 01010011 00001010 00011000
-// ^^^^^^^^ ^^^^^^^^ ~~~~~~~~ ~^^^^^^^ ^^~~~~~~ ~~~^^^^^ ^^^^~~~~ ~~~~~~~~
-// Sign extension    PML4      PDPT      PD        PT        Offset
-//
-// -- On x86(PAE)
-// Page directory pointer selector     2 bits
-// Page directory selector             9 bits
-// Page table selector                 9 bits
-// Byte within page                   12 bits
-// 10 000011011 000001101 001001110101
-// ^^ ~~~~~~~~~ ^^^^^^^^^ ~~~~~~~~~~~~
-// PDPT PD      PT        Offset
-//
-// -- On x86 and ARM
-// Page directory selector            10 bits
-// Page table selector                10 bits
-// Byte within page                   12 bits
-// 1000001101 1000001101 001001110101
-// ~~~~~~~~~~ ^^^^^^^^^^ ~~~~~~~~~~~~
-// PD         PT         Offset
-//
-//
-//                                   x64   x86(PAE)  x86   ARM
-// Page map level 4 selector           9          -    -     -
-// Page directory pointer selector     9          2    -     -
-// Page directory selector             9          9   10    10
-// Page table selector                 9          9   10    10
-// Byte within page                   12         12   12    12
-//
-// 6666555555555544444444443333333333222222222211111111110000000000
-// 3210987654321098765432109876543210987654321098765432109876543210
-// ----------------------------------------------------------------
-// aaaaaaaaaaaaaaaabbbbbbbbbcccccccccdddddddddeeeeeeeeeffffffffffff  x64
-// ................................ccdddddddddeeeeeeeeeffffffffffff  x86(PAE)
-// ................................ddddddddddeeeeeeeeeeffffffffffff  x86
-// ................................ddddddddddeeeeeeeeeeffffffffffff  ARM
-//
-// a = Sign extension, b = PML4, c = PDPT, d = PD, e = PT, f = Offset
+// Checks whether the address is the canonical address
+_Use_decl_annotations_ static bool UtilpIsCanonicalFormAddress(void *address) {
+  if (!IsX64()) {
+    return true;
+  }
+  return !UtilIsInBounds(0x0000800000000000ull, 0xffff7fffffffffffull,
+                         reinterpret_cast<ULONG64>(address));
+}
 
-#if defined(_AMD64_)
 // Return an address of PXE
 _Use_decl_annotations_ static HardwarePte *UtilpAddressToPxe(
     const void *address) {
   const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto pxe_index = (addr >> kUtilpPxiShift) & kUtilpPxiMask;
+  const auto pxe_index = (addr >> g_utilp_pxi_shift) & g_utilp_pxi_mask;
   const auto offset = pxe_index * sizeof(HardwarePte);
-  return reinterpret_cast<HardwarePte *>(kUtilpPxeBase + offset);
+  return reinterpret_cast<HardwarePte *>(g_utilp_pxe_base + offset);
 }
 
 // Return an address of PPE
 _Use_decl_annotations_ static HardwarePte *UtilpAddressToPpe(
     const void *address) {
   const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto ppe_index = (addr >> kUtilpPpiShift) & kUtilpPpiMask;
+  const auto ppe_index = (addr >> g_utilp_ppi_shift) & g_utilp_ppi_mask;
   const auto offset = ppe_index * sizeof(HardwarePte);
-  return reinterpret_cast<HardwarePte *>(kUtilpPpeBase + offset);
+  return reinterpret_cast<HardwarePte *>(g_utilp_ppe_base + offset);
 }
-#endif
 
 // Return an address of PDE
 _Use_decl_annotations_ static HardwarePte *UtilpAddressToPde(
     const void *address) {
   const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto pde_index = (addr >> kUtilpPdiShift) & kUtilpPdiMask;
+  const auto pde_index = (addr >> g_utilp_pdi_shift) & g_utilp_pdi_mask;
   const auto offset = pde_index * sizeof(HardwarePte);
-  return reinterpret_cast<HardwarePte *>(kUtilpPdeBase + offset);
+  return reinterpret_cast<HardwarePte *>(g_utilp_pde_base + offset);
 }
 
 // Return an address of PTE
 _Use_decl_annotations_ static HardwarePte *UtilpAddressToPte(
     const void *address) {
   const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto pte_index = (addr >> kUtilpPtiShift) & kUtilpPtiMask;
+  const auto pte_index = (addr >> g_utilp_pti_shift) & g_utilp_pti_mask;
   const auto offset = pte_index * sizeof(HardwarePte);
-  return reinterpret_cast<HardwarePte *>(kUtilpPteBase + offset);
-}
-
-// Return an address of PDE for PAE enabled x86
-_Use_decl_annotations_ static HardwarePte *UtilpAddressToPdePAE(
-    const void *address) {
-  const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto pde_index = (addr >> kUtilpPdiShiftPae) & kUtilpPdiMaskPae;
-  const auto offset = pde_index * sizeof(HardwarePteX86Pae);
-  return reinterpret_cast<HardwarePte *>(kUtilpPdeBasePae + offset);
-}
-
-// Return an address of PTE for PAE enabled x86
-_Use_decl_annotations_ static HardwarePte *UtilpAddressToPtePAE(
-    const void *address) {
-  const auto addr = reinterpret_cast<ULONG_PTR>(address);
-  const auto pte_index = (addr >> kUtilpPtiShiftPae) & kUtilpPtiMaskPae;
-  const auto offset = pte_index * sizeof(HardwarePteX86Pae);
-  return reinterpret_cast<HardwarePte *>(kUtilpPteBasePae + offset);
+  return reinterpret_cast<HardwarePte *>(g_utilp_pte_base + offset);
 }
 
 // VA -> PA
@@ -574,59 +591,47 @@ _Use_decl_annotations_ ULONG64 UtilPaFromVa(void *va) {
   const auto pa = MmGetPhysicalAddress(va);
   return pa.QuadPart;
 }
-//-----------------------------------------------------------------------//
+
 // VA -> PFN
-_Use_decl_annotations_ PFN_NUMBER UtilPfnFromVa(void *va) 
-{
+_Use_decl_annotations_ PFN_NUMBER UtilPfnFromVa(void *va) {
   return UtilPfnFromPa(UtilPaFromVa(va));
 }
 
-//-----------------------------------------------------------------------//
 // PA -> PFN
-_Use_decl_annotations_ PFN_NUMBER UtilPfnFromPa(ULONG64 pa) 
-{
+_Use_decl_annotations_ PFN_NUMBER UtilPfnFromPa(ULONG64 pa) {
   return static_cast<PFN_NUMBER>(pa >> PAGE_SHIFT);
 }
 
-//-----------------------------------------------------------------------//
 // PA -> VA
-_Use_decl_annotations_ void *UtilVaFromPa(ULONG64 pa) 
-{
+_Use_decl_annotations_ void *UtilVaFromPa(ULONG64 pa) {
   PHYSICAL_ADDRESS pa2 = {};
   pa2.QuadPart = pa;
   return MmGetVirtualForPhysical(pa2);
 }
 
-//-----------------------------------------------------------------------//
 // PNF -> PA
-_Use_decl_annotations_ ULONG64 UtilPaFromPfn(PFN_NUMBER pfn) 
-{
+_Use_decl_annotations_ ULONG64 UtilPaFromPfn(PFN_NUMBER pfn) {
   return pfn << PAGE_SHIFT;
 }
 
-//-----------------------------------------------------------------------//
 // PFN -> VA
-_Use_decl_annotations_ void *UtilVaFromPfn(PFN_NUMBER pfn) 
-{
+_Use_decl_annotations_ void *UtilVaFromPfn(PFN_NUMBER pfn) {
   return UtilVaFromPa(UtilPaFromPfn(pfn));
 }
 
-//-----------------------------------------------------------------------//
 // Allocates continuous physical memory
 _Use_decl_annotations_ void *UtilAllocateContiguousMemory(
     SIZE_T number_of_bytes) {
   PHYSICAL_ADDRESS highest_acceptable_address = {};
   highest_acceptable_address.QuadPart = -1;
-  if (g_utilp_MmAllocateContiguousNodeMemory) 
-  {
+  if (g_utilp_MmAllocateContiguousNodeMemory) {
     // Allocate NX physical memory
     PHYSICAL_ADDRESS lowest_acceptable_address = {};
     PHYSICAL_ADDRESS boundary_address_multiple = {};
     return g_utilp_MmAllocateContiguousNodeMemory(
         number_of_bytes, lowest_acceptable_address, highest_acceptable_address,
         boundary_address_multiple, PAGE_READWRITE, MM_ANY_NODE_OK);
-  } else
-  {
+  } else {
 #pragma warning(push)
 #pragma warning(disable : 30029)
     return MmAllocateContiguousMemory(number_of_bytes,
@@ -634,35 +639,28 @@ _Use_decl_annotations_ void *UtilAllocateContiguousMemory(
 #pragma warning(pop)
   }
 }
-//-----------------------------------------------------------------------//
+
 // Frees an address allocated by UtilAllocateContiguousMemory()
-_Use_decl_annotations_ void UtilFreeContiguousMemory(void *base_address) 
-{
+_Use_decl_annotations_ void UtilFreeContiguousMemory(void *base_address) {
   MmFreeContiguousMemory(base_address);
 }
 
-
-//-----------------------------------------------------------------------//
 // Executes VMCALL
 _Use_decl_annotations_ NTSTATUS UtilVmCall(HypercallNumber hypercall_number,
-                                           void *context)
-{
-  EXCEPTION_POINTERS *exp_info = nullptr;
+                                           void *context) {
   __try {
     const auto vmx_status = static_cast<VmxStatus>(
         AsmVmxCall(static_cast<ULONG>(hypercall_number), context));
     return (vmx_status == VmxStatus::kOk) ? STATUS_SUCCESS
                                           : STATUS_UNSUCCESSFUL;
-  } __except (exp_info = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
     const auto status = GetExceptionCode();
-    //HYPERPLATFORM_COMMON_DBG_BREAK();
-    HYPERPLATFORM_LOG_WARN_SAFE("Exception %08x at %p",
-                                exp_info->ExceptionRecord->ExceptionCode,
-                                exp_info->ExceptionRecord->ExceptionAddress);
+    HYPERPLATFORM_COMMON_DBG_BREAK();
+    HYPERPLATFORM_LOG_WARN_SAFE("Exception thrown (code %08x)", status);
     return status;
   }
 }
-//-----------------------------------------------------------------------//
+
 // Debug prints registers
 _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
                                                 ULONG_PTR stack_pointer) {
@@ -674,12 +672,12 @@ _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
 #if defined(_AMD64_)
   HYPERPLATFORM_LOG_DEBUG_SAFE(
       "Context at %p: "
-      "rax= %p rbx= %p rcx= %p "
-      "rdx= %p rsi= %p rdi= %p "
-      "rsp= %p rbp= %p "
-      " r8= %p  r9= %p r10= %p "
-      "r11= %p r12= %p r13= %p "
-      "r14= %p r15= %p efl= %08x",
+      "rax= %016Ix rbx= %016Ix rcx= %016Ix "
+      "rdx= %016Ix rsi= %016Ix rdi= %016Ix "
+      "rsp= %016Ix rbp= %016Ix "
+      " r8= %016Ix  r9= %016Ix r10= %016Ix "
+      "r11= %016Ix r12= %016Ix r13= %016Ix "
+      "r14= %016Ix r15= %016Ix efl= %08Ix",
       _ReturnAddress(), all_regs->gp.ax, all_regs->gp.bx, all_regs->gp.cx,
       all_regs->gp.dx, all_regs->gp.si, all_regs->gp.di, stack_pointer,
       all_regs->gp.bp, all_regs->gp.r8, all_regs->gp.r9, all_regs->gp.r10,
@@ -688,9 +686,9 @@ _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
 #else
   HYPERPLATFORM_LOG_DEBUG_SAFE(
       "Context at %p: "
-      "eax= %p ebx= %p ecx= %p "
-      "edx= %p esi= %p edi= %p "
-      "esp= %p ebp= %p efl= %08x",
+      "eax= %08Ix ebx= %08Ix ecx= %08Ix "
+      "edx= %08Ix esi= %08Ix edi= %08Ix "
+      "esp= %08Ix ebp= %08Ix efl= %08x",
       _ReturnAddress(), all_regs->gp.ax, all_regs->gp.bx, all_regs->gp.cx,
       all_regs->gp.dx, all_regs->gp.si, all_regs->gp.di, stack_pointer,
       all_regs->gp.bp, all_regs->flags.all);
@@ -700,28 +698,30 @@ _Use_decl_annotations_ void UtilDumpGpRegisters(const AllRegisters *all_regs,
     KeLowerIrql(current_irql);
   }
 }
-//-----------------------------------------------------------------------//
+
 // Reads natural-width VMCS
 _Use_decl_annotations_ ULONG_PTR UtilVmRead(VmcsField field) {
   size_t field_value = 0;
   const auto vmx_status = static_cast<VmxStatus>(
       __vmx_vmread(static_cast<size_t>(field), &field_value));
   if (vmx_status != VmxStatus::kOk) {
-    HYPERPLATFORM_LOG_ERROR_SAFE("__vmx_vmread(0x%08x) failed with an error %d",
-                                 field, vmx_status);
-    HYPERPLATFORM_COMMON_DBG_BREAK();
+    HYPERPLATFORM_COMMON_BUG_CHECK(
+        HyperPlatformBugCheck::kCriticalVmxInstructionFailure,
+        static_cast<ULONG_PTR>(vmx_status), static_cast<ULONG_PTR>(field), 0);
   }
   return field_value;
 }
-//-----------------------------------------------------------------------//
+
 // Reads 64bit-width VMCS
 _Use_decl_annotations_ ULONG64 UtilVmRead64(VmcsField field) {
 #if defined(_AMD64_)
   return UtilVmRead(field);
 #else
   // Only 64bit fields should be given on x86 because it access field + 1 too.
+  // Also, the field must be even number.
   NT_ASSERT(UtilIsInBounds(field, VmcsField::kIoBitmapA,
                            VmcsField::kHostIa32PerfGlobalCtrlHigh));
+  NT_ASSERT((static_cast<ULONG>(field) % 2) == 0);
 
   ULARGE_INTEGER value64 = {};
   value64.LowPart = UtilVmRead(field);
@@ -731,21 +731,13 @@ _Use_decl_annotations_ ULONG64 UtilVmRead64(VmcsField field) {
 #endif
 }
 
-//-----------------------------------------------------------------------//
 // Writes natural-width VMCS
 _Use_decl_annotations_ VmxStatus UtilVmWrite(VmcsField field,
                                              ULONG_PTR field_value) {
-  const auto vmx_status = static_cast<VmxStatus>(
+  return static_cast<VmxStatus>(
       __vmx_vmwrite(static_cast<size_t>(field), field_value));
-  if (vmx_status != VmxStatus::kOk) {
-    HYPERPLATFORM_LOG_ERROR_SAFE(
-        "__vmx_vmwrite(0x%08x) failed with an error %d", field, vmx_status);
-    HYPERPLATFORM_COMMON_DBG_BREAK();
-  }
-  return vmx_status;
 }
 
-//-----------------------------------------------------------------------//
 // Writes 64bit-width VMCS
 _Use_decl_annotations_ VmxStatus UtilVmWrite64(VmcsField field,
                                                ULONG64 field_value) {
@@ -753,8 +745,10 @@ _Use_decl_annotations_ VmxStatus UtilVmWrite64(VmcsField field,
   return UtilVmWrite(field, field_value);
 #else
   // Only 64bit fields should be given on x86 because it access field + 1 too.
+  // Also, the field must be even number.
   NT_ASSERT(UtilIsInBounds(field, VmcsField::kIoBitmapA,
                            VmcsField::kHostIa32PerfGlobalCtrlHigh));
+  NT_ASSERT((static_cast<ULONG>(field) % 2) == 0);
 
   ULARGE_INTEGER value64 = {};
   value64.QuadPart = field_value;
@@ -788,17 +782,44 @@ _Use_decl_annotations_ void UtilWriteMsr64(Msr msr, ULONG64 value) {
 }
 
 // Executes the INVEPT instruction and invalidates EPT entry cache
-/*_Use_decl_annotations_*/ 
-//
-VmxStatus UtilInveptAll() {
+/*_Use_decl_annotations_*/ VmxStatus UtilInveptGlobal() {
   InvEptDescriptor desc = {};
-  const auto vmx_status = static_cast<VmxStatus>(AsmInvept(InvEptType::kGlobalInvalidation, &desc));
-  if (vmx_status != VmxStatus::kOk) 
-  {
-    HYPERPLATFORM_LOG_ERROR_SAFE("UtilInveptAll(Global) failed with an error %d", vmx_status);
-    HYPERPLATFORM_COMMON_DBG_BREAK();
-  }
-  return vmx_status;
+  return static_cast<VmxStatus>(
+      AsmInvept(InvEptType::kGlobalInvalidation, &desc));
+}
+
+// Executes the INVVPID instruction (type 0)
+_Use_decl_annotations_ VmxStatus UtilInvvpidIndividualAddress(USHORT vpid,
+                                                              void *address) {
+  InvVpidDescriptor desc = {};
+  desc.vpid = vpid;
+  desc.linear_address = reinterpret_cast<ULONG64>(address);
+  return static_cast<VmxStatus>(
+      AsmInvvpid(InvVpidType::kIndividualAddressInvalidation, &desc));
+}
+
+// Executes the INVVPID instruction (type 1)
+_Use_decl_annotations_ VmxStatus UtilInvvpidSingleContext(USHORT vpid) {
+  InvVpidDescriptor desc = {};
+  desc.vpid = vpid;
+  return static_cast<VmxStatus>(
+      AsmInvvpid(InvVpidType::kSingleContextInvalidation, &desc));
+}
+
+// Executes the INVVPID instruction (type 2)
+/*_Use_decl_annotations_*/ VmxStatus UtilInvvpidAllContext() {
+  InvVpidDescriptor desc = {};
+  return static_cast<VmxStatus>(
+      AsmInvvpid(InvVpidType::kAllContextInvalidation, &desc));
+}
+
+// Executes the INVVPID instruction (type 3)
+_Use_decl_annotations_ VmxStatus
+UtilInvvpidSingleContextExceptGlobal(USHORT vpid) {
+  InvVpidDescriptor desc = {};
+  desc.vpid = vpid;
+  return static_cast<VmxStatus>(
+      AsmInvvpid(InvVpidType::kSingleContextInvalidationExceptGlobal, &desc));
 }
 
 // Loads the PDPTE registers from CR3 to VMCS
@@ -808,12 +829,13 @@ _Use_decl_annotations_ void UtilLoadPdptes(ULONG_PTR cr3_value) {
   // Have to load cr3 to make UtilPfnFromVa() work properly.
   __writecr3(cr3_value);
 
-  // Gets PDPTEs fomr CR3
+  // Gets PDPTEs form CR3
   PdptrRegister pd_pointers[4] = {};
   for (auto i = 0ul; i < 4; ++i) {
-    const auto pd_addr = kUtilpPdeBasePae + i * PAGE_SIZE;
+    const auto pd_addr = g_utilp_pde_base + i * PAGE_SIZE;
     pd_pointers[i].fields.present = true;
-    pd_pointers[i].fields.page_directory_pa = UtilPfnFromVa(reinterpret_cast<void *>(pd_addr));
+    pd_pointers[i].fields.page_directory_pa =
+        UtilPfnFromVa(reinterpret_cast<void *>(pd_addr));
   }
 
   __writecr3(current_cr3);
